@@ -66,14 +66,14 @@ void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN 0 */
 uint8_t DAM_MOTOR_RxData[20];
 uint8_t ZDT_MOTOR_rxData[32]={0};
-uint8_t loopback_rx_data[16] = {0};
+uint8_t loopback_rx_data[32] = {0};
 FDCAN_RxHeaderTypeDef loopback_rx_header;
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs) {
   if (hfdcan->Instance == FDCAN1) {
     // 获取接收到的消息
     if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, DAM_MOTOR_RxData) == HAL_OK) {
       // 解析电机反馈数据（反馈帧ID为0）
-      if(RxHeader.Identifier == 0x014) {
+      if(RxHeader.Identifier == 0x01) {
         dm_motor_fbdata(&motor4, DAM_MOTOR_RxData);
       }
     }
@@ -113,10 +113,10 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
       OTTO_uart(&huart_debug, "===== FDCAN2回环帧（发送的命令）=====");
       OTTO_uart(&huart_debug, "帧类型：扩展帧（29位）");
       OTTO_uart(&huart_debug, "帧ID：0x%04X", loopback_rx_header.Identifier); // 扩展帧ID用8位十六进制
-      OTTO_uart(&huart_debug, "数据长度：%d 字节", loopback_rx_header.DataLength / 1); // DLC转字节数
+      OTTO_uart(&huart_debug, "数据长度：%d 字节", loopback_rx_header.DataLength ); // DLC转字节数
       OTTO_uart(&huart_debug, "数据内容（十六进制）：");
       // 打印数据内容（逐字节）
-      for (int i = 0; i < loopback_rx_header.DataLength / 1; i++) {
+      for (int i = 0; i < loopback_rx_header.DataLength ; i++) {
         OTTO_uart(&huart_debug, "0x%02X ", loopback_rx_data[i]);
       }
       OTTO_uart(&huart_debug, "=====================================");
@@ -125,7 +125,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 #endif
   }
 }
-//电机日志
+//获取电机反馈
 ZDT_FBpara_t* get_motor1() {
   return &z_motor1;
 }

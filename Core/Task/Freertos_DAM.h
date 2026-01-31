@@ -6,7 +6,7 @@
 #include "cmsis_os2.h"
 #include "FreeRTOS.h"
 
-
+#define DEBUG_MODE 0
 // typedef struct {
 //     Pose Target_Pos;        //目标位置
 //     uint32_t time_tamp;     //时间戳

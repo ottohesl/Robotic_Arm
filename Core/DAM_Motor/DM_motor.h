@@ -108,147 +108,22 @@ typedef struct {
     float T_MAX;           ///< 扭矩控制最大范围(N·m)
 } motor_t;
 
-/**
- * @brief 通过FDCAN发送数据到指定设备
- * @param hfdcan FDCAN句柄指针
- * @param id 目标CAN ID
- * @param data 要发送的数据缓冲区
- * @param len 数据长度(字节)
- * @return uint8_t 发送状态: 0-成功, 1-失败
- */
 uint8_t fdcanx_send_data(FDCAN_HandleTypeDef *hfdcan, uint16_t id, uint8_t *data, uint32_t len);
-
-/**
- * @brief 解析电机反馈数据
- * @param motor 电机控制结构体指针
- * @param rx_data 接收到的原始数据缓冲区
- */
 void dm_motor_fbdata(motor_t *motor, uint8_t *rx_data);
-
-/**
- * @brief 浮点数转无符号整型
- * @param x_float 输入的浮点数
- * @param x_min 数值范围最小值
- * @param x_max 数值范围最大值
- * @param bits 输出整型的位数
- * @return int 转换后的整型数值
- */
 int float_to_uint(float x_float, float x_min, float x_max, int bits);
-
-/**
- * @brief 无符号整型转浮点数
- * @param x_int 输入的整型数
- * @param x_min 数值范围最小值
- * @param x_max 数值范围最大值
- * @param bits 输入整型的位数
- * @return float 转换后的浮点数值
- */
 float uint_to_float(int x_int, float x_min, float x_max, int bits);
-
-/**
- * @brief 使能指定模式的电机控制
- * @param hcan FDCAN句柄指针
- * @param motor_id 电机ID
- * @param mode_id 控制模式ID
- */
 void enable_motor_mode(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, uint16_t mode_id);
-
-/**
- * @brief 失能指定模式的电机控制
- * @param hcan FDCAN句柄指针
- * @param motor_id 电机ID
- * @param mode_id 控制模式ID
- */
 void disable_motor_mode(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, uint16_t mode_id);
-
-/**
- * @brief 保存当前位置为零点
- * @param hcan FDCAN句柄指针
- * @param motor_id 电机ID
- * @param mode_id 控制模式ID
- */
 void save_pos_zero(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, uint16_t mode_id);
-
-/**
- * @brief 清除电机错误状态
- * @param hcan FDCAN句柄指针
- * @param motor_id 电机ID
- * @param mode_id 控制模式ID
- */
 void clear_err(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, uint16_t mode_id);
-
-/**
- * @brief 使能电机(根据当前设置的模式)
- * @param hcan FDCAN句柄指针
- * @param motor 电机控制结构体指针
- */
 void dm_motor_enable(FDCAN_HandleTypeDef* hcan, motor_t *motor);
-
-/**
- * @brief 失能电机并清除控制参数
- * @param hcan FDCAN句柄指针
- * @param motor 电机控制结构体指针
- */
 void dm_motor_disable(FDCAN_HandleTypeDef* hcan, motor_t *motor);
-
-/**
- * @brief 清除电机控制参数(归零)
- * @param motor 电机控制结构体指针
- */
 void dm_motor_clear_para(motor_t *motor);
-
-/**
- * @brief 清除电机错误状态(根据当前模式)
- * @param hcan FDCAN句柄指针
- * @param motor 电机控制结构体指针
- */
 void dm_motor_clear_err(FDCAN_HandleTypeDef* hcan, motor_t *motor);
-
-/**
- * @brief 发送电机控制命令(根据当前模式)
- * @param hcan FDCAN句柄指针
- * @param motor 电机控制结构体指针
- */
 void dm_motor_ctrl_send(FDCAN_HandleTypeDef* hcan, motor_t *motor);
-
-/**
- * @brief MIT模式控制命令发送
- * @param hcan FDCAN句柄指针
- * @param motor 电机控制结构体指针
- * @param motor_id 电机ID
- * @param pos 目标位置(rad)
- * @param vel 目标速度(rad/s)
- * @param kp 位置比例系数
- * @param kd 位置微分系数
- * @param tor 前馈扭矩(N·m)
- */
 void mit_ctrl(FDCAN_HandleTypeDef* hcan, motor_t *motor, uint16_t motor_id, float pos, float vel, float kp, float kd, float tor);
-
-/**
- * @brief 位置模式控制命令发送
- * @param hcan FDCAN句柄指针
- * @param motor_id 电机ID
- * @param pos 目标位置(rad)
- * @param vel 限制速度(rad/s)
- */
 void pos_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel);
-
-/**
- * @brief 速度模式控制命令发送
- * @param hcan FDCAN句柄指针
- * @param motor_id 电机ID
- * @param vel 目标速度(rad/s)
- */
 void spd_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float vel);
-
-/**
- * @brief 电流模式控制命令发送
- * @param hcan FDCAN句柄指针
- * @para
- * @param pos 目标位置(rad)
- * @param vel 限制速度(rad/s)
- * @param cur 目标电流(A)
- */
 void psi_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel, float cur);
 void redefine_motor(motor_t *motor,motor_name ser,float position, float tor);
 //extern motor_t motor1, motor2, motor3, motor4;

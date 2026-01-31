@@ -334,14 +334,14 @@ void mit_ctrl(FDCAN_HandleTypeDef* hcan, motor_t *motor, uint16_t motor_id, floa
     uint16_t kd_tmp = float_to_uint(kd, KD_MIN, KD_MAX, 12);
 
     // 按照达妙MIT模式协议打包数据
-    data[0] = (pos_tmp >> 8);
-    data[1] = pos_tmp;
-    data[2] = (vel_tmp >> 4);
-    data[3] = ((vel_tmp & 0xF) << 4) | (kp_tmp >> 8);
-    data[4] = kp_tmp;
-    data[5] = (kd_tmp >> 4);
-    data[6] = ((kd_tmp & 0xF) << 4) | (tor_tmp >> 8);
-    data[7] = tor_tmp;
+    data[0] = (pos_tmp >> 8) & 0xFF;
+    data[1] = (pos_tmp & 0xFF);
+    data[2] = ((vel_tmp >> 4)& 0xFF);
+    data[3] = ((vel_tmp & 0xF) << 4) | ((kp_tmp >> 8) & 0xF);
+    data[4] = (kp_tmp & 0xFF);
+    data[5] = ((kd_tmp >> 4) & 0xFF);
+    data[6] = ((kd_tmp & 0xF) << 4) | ((tor_tmp >> 8) & 0xF);
+    data[7] = (tor_tmp & 0xFF);
 
     fdcanx_send_data(hcan, id, data, 8);
 }
