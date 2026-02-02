@@ -478,8 +478,8 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
 
     // 初始化状态参数
     motor->Motor_Status.ERROR=0;
-    motor->IS_Receive = 0;
-    motor->vaild = 0;
+    //motor->IS_Receive = 0;
+    //motor->vaild = 0;
     motor->id = id;
 
     // 根据功能码解析反馈数据
@@ -551,7 +551,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             }
             break;
 
-        case S_TEMP: // 驱动器温度
+        case S_TEMP: // 驱动器温度------该版本取消读取
             if (rxdata[3]==CHECK_SUM) {
                 if (rxdata[1]==CCW)
                     motor->S_Temp= (-1)*(float)rxdata[2];
@@ -571,7 +571,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             }
             break;
 
-        case S_STATE: // 系统状态（全参数）
+        case S_STATE: // 系统状态（全参数）------仅做参考，电机会反馈0x0100-0x0104共四个数据包
             if (rxdata[29]==CHECK_SUM) {
                 // 总线电压
                 motor->S_vbus =  rxdata[3]<<8|rxdata[4];
@@ -621,6 +621,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.EN_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         case ZDT_FUNC_TOR_MODE: // 力矩模式指令反馈
@@ -629,6 +630,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.Tor_Mode_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         case ZDT_FUNC_VEL_MODE: // 速度模式指令反馈
@@ -637,6 +639,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.Vel_Mode_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         case ZDT_FUNC_TRAPE_POS_MODE: // 梯形位置模式指令反馈
@@ -645,6 +648,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.Trape_Pos_Val_Mode_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         case ZDT_FUNC_DIRECT_POS_MODE: // 直通位置模式指令反馈
@@ -653,6 +657,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.Direct_Pos_Mode_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         case ZDT_FUNC_STOP_MOTOR: // 停止指令反馈
@@ -661,6 +666,7 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.Stop_Motor_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         case ZDT_FUNC_SYNC_MODE: // 同步模式指令反馈
@@ -669,12 +675,14 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
             if (rxdata[1]==0xE2&&rxdata[2]==0x6B)
                 motor->Motor_Status.Sync_Mode_status=Error_Parameter;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
 
         default: // 未知指令/错误指令
             if (rxdata[0]==0x00&&rxdata[1]==0XEE&&rxdata[2]==0X6B)
                 motor->Motor_Status.ERROR=Error_Command;
             motor->IS_Receive = 1;
+            motor->vaild=1;
             break;
     }
 }
@@ -691,13 +699,13 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
  * @retval 无
  * @note   自动转换速度单位（转/秒→转/分钟）和角度→脉冲数，简化调用
  */
-void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, uint16_t vel_RPS, float angle) {
+void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, float vel_RPS, float angle) {
     uint16_t pos=P(angle);          // 角度转脉冲数
     uint16_t vel=vel_RPS*60.0f;     // 转/秒 → 转/分钟
 
     // 发送梯形位置模式指令
-    ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,ABSOLUTE_POS,SIN);
-    osDelay(200); // 延时确保指令发送完成
+    ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,RELATIVE_POS,SIN);
+    osDelay(20); // 延时确保指令发送完成
 }
 
 /**

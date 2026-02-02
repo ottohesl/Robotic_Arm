@@ -7,7 +7,7 @@
 // 电机日志配置（可根据需求调整）
 #define LOG_TASK_STACK_SIZE    1024
 #define LOG_TASK_PRIORITY      2
-#define LOG_REFRESH_INTERVAL   500    // 日志刷新间隔(ms)
+#define LOG_REFRESH_INTERVAL   50    // 日志刷新间隔(ms)
 #define TEMP_WARN_THRESHOLD    60.0f   // 温度告警阈值(℃)
 #define VELOCITY_PRINT_PRECISION 2     // 转速打印精度
 #define POSITION_PRINT_PRECISION 2     // 位置打印精度

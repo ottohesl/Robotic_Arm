@@ -34,17 +34,21 @@ extern "C" {
 #include "cmsis_os2.h"
 #include "usart.h"
 #include "fdcan.h"
+#include "DM_motor.h"
 #include "ZDT_Control.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+  typedef struct {
+    FDCAN_RxHeaderTypeDef rx_header;  // CAN帧头（ID、长度等）
+    uint8_t rx_data[8];               // CAN数据（最大8字节）
+  } CAN_Rx_Msg_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-#define check_num  0
+#define check_num  1
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -52,7 +56,8 @@ extern "C" {
 
 #define huart_debug   huart3
 #define huart_sensor  huart1
-#define hfdcan_zdt   hfdcan2
+#define hfdcan_zdt    hfdcan2
+#define hfdcan_dam    hfdcan1
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -62,7 +67,9 @@ void Error_Handler(void);
 ZDT_FBpara_t* get_motor1();
 ZDT_FBpara_t* get_motor2();
 ZDT_FBpara_t* get_motor3();
-
+motor_t* DAM_get_motor1();
+motor_t* DAM_get_motor2();
+motor_t* DAM_get_motor3();
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -71,6 +78,8 @@ ZDT_FBpara_t* get_motor3();
   extern osMessageQueueId_t Solve_AngleHandle;
   extern osMessageQueueId_t Motor_StateHandle;
   extern osMessageQueueId_t Target_PosHandle;
+  extern osMessageQueueId_t CAN1RX_DataHandle;
+  extern osMessageQueueId_t CAN2RX_DataHandle;
   extern osMutexId_t uart_log_mutexHandle;
   //extern ZDT_FBpara_t z_motor1;
 /* USER CODE END Private defines */

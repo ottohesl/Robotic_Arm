@@ -65,21 +65,21 @@ const osThreadAttr_t Solve_Task_attributes = {
 osThreadId_t Camera_Data_TasHandle;
 const osThreadAttr_t Camera_Data_Tas_attributes = {
   .name = "Camera_Data_Tas",
-  .stack_size = 512 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Debug_Task */
 osThreadId_t Debug_TaskHandle;
 const osThreadAttr_t Debug_Task_attributes = {
   .name = "Debug_Task",
-  .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityLow,
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* Definitions for Log_Task */
 osThreadId_t Log_TaskHandle;
 const osThreadAttr_t Log_Task_attributes = {
   .name = "Log_Task",
-  .stack_size = 256 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow3,
 };
 /* Definitions for Solve_Angle */
@@ -96,6 +96,16 @@ const osMessageQueueAttr_t Motor_State_attributes = {
 osMessageQueueId_t Target_PosHandle;
 const osMessageQueueAttr_t Target_Pos_attributes = {
   .name = "Target_Pos"
+};
+/* Definitions for CAN1RX_Data */
+osMessageQueueId_t CAN1RX_DataHandle;
+const osMessageQueueAttr_t CAN1RX_Data_attributes = {
+  .name = "CAN1RX_Data"
+};
+/* Definitions for CAN2RX_Data */
+osMessageQueueId_t CAN2RX_DataHandle;
+const osMessageQueueAttr_t CAN2RX_Data_attributes = {
+  .name = "CAN2RX_Data"
 };
 /* Definitions for uart_log_mutex */
 osMutexId_t uart_log_mutexHandle;
@@ -150,6 +160,12 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Target_Pos */
   Target_PosHandle = osMessageQueueNew (16, sizeof(uint16_t), &Target_Pos_attributes);
+
+  /* creation of CAN1RX_Data */
+  CAN1RX_DataHandle = osMessageQueueNew (16, sizeof(CAN_Rx_Msg_t*), &CAN1RX_Data_attributes);
+
+  /* creation of CAN2RX_Data */
+  CAN2RX_DataHandle = osMessageQueueNew (16, sizeof(CAN_Rx_Msg_t*), &CAN2RX_Data_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */

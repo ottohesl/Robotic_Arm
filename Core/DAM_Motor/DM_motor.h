@@ -1,30 +1,41 @@
 #ifndef DM_MOTOR_H
 #define DM_MOTOR_H
-#include "main.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include "fdcan.h"
-#include "usart.h"
-
+#include "ottohesl.h"
+#define DAM_MOTOR_Vision 7
+#if (DAM_MOTOR_Vision==1)
+#include "stm32f1xx_hal.h"
+#endif
+#if (DAM_MOTOR_Vision==4)
+#include "stm32f4xx_hal.h"
+#endif
+#if (DAM_MOTOR_Vision==7)
+#include "stm32h7xx_hal.h"
+#endif
 /**
- * @brief 主机地址
+ * @brief 主机地址/从机地址
  * 如果要自定义地址，上位机连接电机改地址就行
  */
 #define MASTER  0x000
+#define DAM_MOTOR1 = 0x01,
+#define DAM_MOTOR2 = 0x02,
+#define DAM_MOTOR3 = 0x03,
 /**
  * @brief 电机控制模式常量定义
  * 建议使用mit模式，可以涵盖位置速度的控制模式
  * 位置速度控制模式有问题，mit模式够用了
  */
-#define mit_mode 0      ///< MIT控制模式
-#define pos_mode 256      ///< 位置控制模式
-#define spd_mode 512      ///< 速度控制模式
-#define psi_mode 768      ///< 电流控制模式
+#define mit_mode 0x000      ///< MIT控制模式
+#define pos_mode 0x100      ///< 位置控制模式
+#define spd_mode 0x200      ///< 速度控制模式
+#define psi_mode 0x300      ///< 电流控制模式
 
 /**
  * @brief 电机参数范围默认值定义
  */
-#define PMAX_DEFAULT 6.28f    ///< 默认位置最大值(rad)
+#define PMAX_DEFAULT 12.5f    ///< 默认位置最大值(rad)
 #define VMAX_DEFAULT 30.0f    ///< 默认速度最大值(rad/s)
 #define TMAX_DEFAULT 10.0f    ///< 默认扭矩最大值(N·m)
 #define KP_MIN 0.0f           ///< Kp最小值
@@ -106,6 +117,7 @@ typedef struct {
     float P_MAX;           ///< 位置控制最大范围(rad)
     float V_MAX;           ///< 速度控制最大范围(rad/s)
     float T_MAX;           ///< 扭矩控制最大范围(N·m)
+    bool valid;
 } motor_t;
 
 uint8_t fdcanx_send_data(FDCAN_HandleTypeDef *hfdcan, uint16_t id, uint8_t *data, uint32_t len);
@@ -120,12 +132,18 @@ void dm_motor_enable(FDCAN_HandleTypeDef* hcan, motor_t *motor);
 void dm_motor_disable(FDCAN_HandleTypeDef* hcan, motor_t *motor);
 void dm_motor_clear_para(motor_t *motor);
 void dm_motor_clear_err(FDCAN_HandleTypeDef* hcan, motor_t *motor);
-void dm_motor_ctrl_send(FDCAN_HandleTypeDef* hcan, motor_t *motor);
+void dm_motor_ctrl_send(FDCAN_HandleTypeDef* hcan, motor_t *motor, float pos, float vel, float tor);
+void write_motor_data(uint16_t id, uint8_t rid, uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3);
+void save_motor_data(uint16_t id, uint8_t rid) ;
 void mit_ctrl(FDCAN_HandleTypeDef* hcan, motor_t *motor, uint16_t motor_id, float pos, float vel, float kp, float kd, float tor);
 void pos_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel);
 void spd_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float vel);
 void psi_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel, float cur);
-void redefine_motor(motor_t *motor,motor_name ser,float position, float tor);
+void DAM_Motor_Init(motor_t *motor,motor_name ser,motor_mode_t mode);
+void DAM_MOTOR_MIT(motor_name addr , float pos, float vel, float tor);
+void DAM_MOTOR_POS(motor_name addr , float pos, float vel_PRS);
+void DAM_MOTOR_VEL(motor_name addr , float vel);
+void DAM_MOTOR_CUR(motor_name addr , float pos, float vel, float cur);
 //extern motor_t motor1, motor2, motor3, motor4;
 
 #endif //DM_MOTOR_H

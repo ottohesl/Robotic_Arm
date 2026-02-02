@@ -7,6 +7,9 @@
 #include "FreeRTOS.h"
 
 #define DEBUG_MODE 0
+#define DAM_MOTOR_NUM 3
+#define ZDT_MOTOR_NUM 3
+#define delata        50
 // typedef struct {
 //     Pose Target_Pos;        //目标位置
 //     uint32_t time_tamp;     //时间戳

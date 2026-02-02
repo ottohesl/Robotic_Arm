@@ -100,7 +100,9 @@ static void ZDT_Log_PrintControlStatus(ZDT_FBpara_t *motor)
     }
 
     if (motor->Motor_Status.ERROR == Error_Command) {
-        ZDT_Log_UART_Printf("❌ 电机[0x%02X]: 接收到错误命令", motor->id);
+        while (1) {
+            ZDT_Log_UART_Printf("❌ 电机[0x%02X]: 接收到错误命令", motor->id);
+        }
     }
 }
 
@@ -127,12 +129,9 @@ static void ZDT_Log_PrintSysParams(ZDT_FBpara_t *motor)
     // 位置误差
     ZDT_Log_UART_Printf("📏 位置误差: %.2f °", motor->S_Perr);
 
-    // 驱动器温度
-    ZDT_Log_UART_Printf("🌡️ 驱动器温度: %.1f °C", motor->S_Temp);
-
     // PID参数
-    ZDT_Log_UART_Printf("🎛️ PID参数 - KP:%d, KI:%d, KD:%d",
-                       motor->S_pid.Pos_kp, motor->S_pid.Pos_ki, motor->S_pid.Pos_kd);
+    //ZDT_Log_UART_Printf("🎛️ PID参数 - KP:%d, KI:%d, KD:%d",
+                       //motor->S_pid.Pos_kp, motor->S_pid.Pos_ki, motor->S_pid.Pos_kd);
 }
 
 /**
@@ -152,12 +151,6 @@ static void ZDT_Log_CheckSafetyStatus(ZDT_FBpara_t *motor)
     if (motor->S_Flag.IS_SAVE_LOCKED) {
         ZDT_Log_UART_Printf("⚠️ 【告警】电机触发堵转保护！");
     }
-    // 温度告警
-    if (motor->S_Temp > TEMP_WARN_THRESHOLD) {
-        ZDT_Log_UART_Printf("⚠️ 【告警】驱动器温度过高(%.1f°C)！", motor->S_Temp);
-    } else {
-        ZDT_Log_UART_Printf("✅ 温度正常");
-    }
     // 到位状态
     ZDT_Log_UART_Printf("🎯 电机到位状态: %s", motor->S_Flag.IS_INPLACE ? "已到位" : "未到位");
 }
@@ -175,6 +168,7 @@ void ZDT_Log_PrintMotorStatus(ZDT_FBpara_t *motor)
     if (motor->IS_Receive) {
         ZDT_Log_PrintControlStatus(motor);  // 控制状态
         motor->IS_Receive = false;
+        motor->vaild=0;
         return;
     }
     ZDT_Log_UART_Printf("========= 电机[0x%02X] =========", motor->id);
@@ -190,21 +184,26 @@ void ZDT_Log_PrintMotorStatus(ZDT_FBpara_t *motor)
  * @note   用于基本电机状态下使用
  * @note   用于部分电机状态，非完整打印电机所有状态，在非调试场景使用
  */
-void ZDT_Log_PrintCmdResult(ZDT_FBpara_t *motor)
+void  ZDT_Log_PrintCmdResult(ZDT_FBpara_t *motor)
 {
     if (motor == NULL) return;
     ZDT_Control_Read_Sys_Params(&hfdcan_zdt, motor->id, S_VEL);
-    osDelay(10);
+    osDelay(50);
     ZDT_Control_Read_Sys_Params(&hfdcan_zdt, motor->id, S_CPOS);
-    osDelay(10);
-    if (motor->IS_Receive) {
-        ZDT_Log_PrintControlStatus(motor);  // 控制状态
-        motor->IS_Receive = false;
-        return;
+    osDelay(50);
+    if (motor->vaild) {
+        ZDT_Log_UART_Printf("========= 电机[0x%02X] =========", motor->id);
+        if (motor->IS_Receive) {
+            ZDT_Log_PrintControlStatus(motor);  // 控制状态
+            motor->IS_Receive = 0;
+            motor->vaild=0;
+            return;
+        }
+        ZDT_Log_UART_Printf("📍 当前位置: %.2f °", motor->S_Cpos);
+        // 转速（RPM/RPS）
+        ZDT_Log_UART_Printf("⚡ 实时转速: %.2f RPM (%.2f RPS)",
+                           motor->S_Vel.Vel_RPM, motor->S_Vel.Vel_RPS);
+        motor->vaild=0;
     }
-    ZDT_Log_UART_Printf("📍 当前位置: %.2f °", motor->S_Cpos);
-    // 转速（RPM/RPS）
-    ZDT_Log_UART_Printf("⚡ 实时转速: %.2f RPM (%.2f RPS)",
-                       motor->S_Vel.Vel_RPM, motor->S_Vel.Vel_RPS);
 }
 
