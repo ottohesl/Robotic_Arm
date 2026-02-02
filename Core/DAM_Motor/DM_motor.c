@@ -1,5 +1,7 @@
 #include "DM_motor.h"
 
+#include "usart.h"
+
 char message[128];
 /**
  * @brief 通过FDCAN发送数据到指定设备
@@ -16,8 +18,7 @@ uint8_t fdcanx_send_data(FDCAN_HandleTypeDef *hfdcan, uint16_t id, uint8_t *data
 
     // 达妙电机使用标准CAN帧，只支持8字节数据
     if (len > 8) {
-        int msg_len = sprintf(message, "Error: Data length %lu too long!\n", len);
-        HAL_UART_Transmit(&huart_debug, (uint8_t *)message, msg_len, 100);
+        OTTO_uart(&huart_debug,"error ,DAM!!!");
         return 1;
     }
 
@@ -61,6 +62,7 @@ void dm_motor_fbdata(motor_t *motor, uint8_t *rx_data)
     motor->para.tor = uint_to_float(motor->para.t_int, -motor->T_MAX, motor->T_MAX, 12);
     motor->para.Tmos = (float)(rx_data[6]);
     motor->para.Tcoil = (float)(rx_data[7]);
+    motor->valid = 1;
 }
 
 /**
@@ -290,25 +292,39 @@ void dm_motor_clear_err(FDCAN_HandleTypeDef* hcan, motor_t *motor)
  * @param motor 电机控制结构体指针
  * @note 根据设置的控制模式调用对应的控制函数发送命令
  */
-void dm_motor_ctrl_send(FDCAN_HandleTypeDef* hcan, motor_t *motor)
+void dm_motor_ctrl_send(FDCAN_HandleTypeDef* hcan, motor_t *motor, float pos, float vel, float tor)
 {
     switch(motor->ctrl.mode)
     {
         case mit_mode:
-            mit_ctrl(hcan, motor, motor->id, motor->ctrl.pos_set, motor->ctrl.vel_set, motor->ctrl.kp_set, motor->ctrl.kd_set, motor->ctrl.tor_set);
+            mit_ctrl(hcan, motor, motor->id, pos, vel, motor->ctrl.kp_set, motor->ctrl.kd_set, tor);
             break;
         case pos_mode:
-            pos_ctrl(hcan, motor->id, motor->ctrl.pos_set, motor->ctrl.vel_set);
+            pos_ctrl(hcan, motor->id, pos, vel);
             break;
         case spd_mode:
-            spd_ctrl(hcan, motor->id, motor->ctrl.vel_set);
+            spd_ctrl(hcan, motor->id, vel);
             break;
         case psi_mode:
-            psi_ctrl(hcan, motor->id, motor->ctrl.pos_set, motor->ctrl.vel_set, motor->ctrl.cur_set);
+            psi_ctrl(hcan, motor->id, pos, vel, motor->ctrl.cur_set);
             break;
     }
 }
-
+// 发送写入电机寄存器命令
+void write_motor_data(uint16_t id, uint8_t rid, uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3)
+{
+    uint8_t can_id_l = id & 0xFF;       // 低 8 位
+    uint8_t can_id_h = (id >> 8) & 0x07; // 高 3 位
+    uint8_t data[8] = {can_id_l, can_id_h, 0x55, rid, d0, d1, d2, d3};
+    fdcanx_send_data(&hfdcan1, 0x7FF, data, 8);
+}
+void save_motor_data(uint16_t id, uint8_t rid)
+{
+    uint8_t can_id_l = id & 0xFF;       // 低 8 位
+    uint8_t can_id_h = (id >> 8) & 0x07; // 高 3 位
+    uint8_t data[4] = {can_id_l, can_id_h, 0xAA, 0x01};
+    fdcanx_send_data(&hfdcan1, 0x7FF, data, 4);
+}
 /**
  * @brief MIT模式控制命令发送
  * @param hcan FDCAN句柄指针
@@ -354,30 +370,27 @@ void mit_ctrl(FDCAN_HandleTypeDef* hcan, motor_t *motor, uint16_t motor_id, floa
  * @param vel 限制速度(rad/s)
  * @note 位置模式下使用浮点数直接传输，支持梯形加减速
  */
-void pos_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel)
-{
+void pos_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel) {
     uint16_t id;
     uint8_t *pbuf, *vbuf;
     uint8_t data[8];
 
     id = motor_id + POS_MODE;
-    pbuf = (uint8_t*)&pos;
-    vbuf = (uint8_t*)&vel;
+    pbuf=(uint8_t*)&pos;
+    vbuf=(uint8_t*)&vel;
 
-    // 浮点数按小端序转换为字节流
     data[0] = *pbuf;
-    data[1] = *(pbuf + 1);
-    data[2] = *(pbuf + 2);
-    data[3] = *(pbuf + 3);
+    data[1] = *(pbuf+1);
+    data[2] = *(pbuf+2);
+    data[3] = *(pbuf+3);
 
     data[4] = *vbuf;
-    data[5] = *(vbuf + 1);
-    data[6] = *(vbuf + 2);
-    data[7] = *(vbuf + 3);
+    data[5] = *(vbuf+1);
+    data[6] = *(vbuf+2);
+    data[7] = *(vbuf+3);
 
     fdcanx_send_data(hcan, id, data, 8);
 }
-
 /**
  * @brief 速度模式控制命令发送
  * @param hcan FDCAN句柄指针
@@ -446,39 +459,63 @@ void psi_ctrl(FDCAN_HandleTypeDef* hcan, uint16_t motor_id, float pos, float vel
  * @param motor 句柄指针
  * @param ser 电机地址枚举
  * @param position 目标位置(角度制)
- * @param tor 力矩
+ * @param val 速度（rad/s转为angle/s）
  * @note 只针对位置和力矩的重定义，如要设置kp，kd或者修改速度等，可直接进入函数配置；亦或者重新添加参数列表
- * 默认为mit模式，对于机械臂设置，就mit模式即可
+ * mit模式说明：
  * kp=0的时候,设置位置无法生效，如果速度不为0，那么电机会直接旋转；所以设置为位置模式的时候必须给kp一个值
  * kp影响精度,kp越大那么电机振动越明显且力矩越大，但是会越接近设置的位置角度
  */
-// void redefine_motor(motor_t *motor,motor_name ser,float position, float tor) {
-//     float rad = position * M_PI / 180;
-//     motor->id = ser;
-//     motor->mst_id = MASTER;
-//     motor->ctrl.pos_set  = rad;
-//     motor->ctrl.tor_set  = tor;
-//     motor->ctrl.vel_set  = 0.1;
-//     motor->ctrl.kp_set   = 8.0f;
-//     motor->ctrl.kd_set   = 1.0f;
-//     motor->ctrl.cur_set  = 0.0f;
-//     motor->P_MAX = PMAX_DEFAULT;
-//     motor->V_MAX = VMAX_DEFAULT;
-//     motor->T_MAX = TMAX_DEFAULT;
-//     motor->ctrl.mode = MIT_MODE;
-// }
-void redefine_motor(motor_t *motor,motor_name ser,float position, float tor) {
-    float rad = position * M_PI / 180;
+void DAM_Motor_Init(motor_t *motor,motor_name ser,float position, float val) {
+    float pos_rad = position * M_PI / 180;
+    float vel_rad = val * M_PI / 180;
     motor->id = ser;
     motor->mst_id = MASTER;
-    motor->ctrl.pos_set  =rad;
-    motor->ctrl.tor_set  = tor;
-    motor->ctrl.vel_set  = 2.0f;
-    motor->ctrl.kp_set   = 1.0f;
-    motor->ctrl.kd_set   = 0.0f;
-    motor->ctrl.cur_set  = 0.0f;
+    motor->ctrl.pos_set  = pos_rad;
+    motor->ctrl.tor_set  = 0.0f;
+    motor->ctrl.vel_set  = vel_rad;
+    motor->ctrl.kp_set   = 2.0f;
+    motor->ctrl.kd_set   = 1.0f;
+    motor->ctrl.cur_set  = 1.0f;
     motor->P_MAX = PMAX_DEFAULT;
     motor->V_MAX = VMAX_DEFAULT;
     motor->T_MAX = TMAX_DEFAULT;
-    motor->ctrl.mode = SPD_MODE;
+    motor->ctrl.mode = POS_MODE;
+}
+void DAM_MOTOR_MIT(motor_name addr , float pos, float vel, float tor) {
+    motor_t *motor = NULL;
+    switch(addr) {
+        case MOTOR1:
+            motor=DAM_get_motor1();
+            break;
+        case MOTOR2:
+            motor=DAM_get_motor2();
+            break;
+        case MOTOR3:
+            motor=DAM_get_motor3();
+            break;
+        default:
+            OTTO_uart(&huart_debug,"地址错误：0x%02",addr);
+            break;
+    }
+
+    dm_motor_ctrl_send(&hfdcan_dam, motor,pos,vel,tor);
+}
+void DAM_MOTOR_POS(motor_name addr , float pos, float vel) {
+    motor_t *motor = NULL;
+    switch(addr) {
+        case MOTOR1:
+            motor=DAM_get_motor1();
+            break;
+        case MOTOR2:
+            motor=DAM_get_motor2();
+            break;
+        case MOTOR3:
+            motor=DAM_get_motor3();
+            break;
+        default:
+            OTTO_uart(&huart_debug,"地址错误：0x%02",addr);
+            break;
+    }
+
+    dm_motor_ctrl_send(&hfdcan_dam, motor,pos,vel,0);
 }

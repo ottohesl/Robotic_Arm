@@ -44,6 +44,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/DH_Control
         Core/ZDT_Motor/ZDT_MOTOR_LOG.c
         Core/ZDT_Motor/ZDT_MOTOR_LOG.h
+        Core/DAM_Motor/DM_Motor_LOG.c
+        Core/DAM_Motor/DM_Motor_LOG.h
 )
 
 # Add STM32CubeMX generated sources

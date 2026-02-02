@@ -6,7 +6,10 @@
 #include "cmsis_os2.h"
 #include "FreeRTOS.h"
 
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
+#define DAM_MOTOR_NUM 1
+#define ZDT_MOTOR_NUM 1
+#define delata        50
 // typedef struct {
 //     Pose Target_Pos;        //目标位置
 //     uint32_t time_tamp;     //时间戳

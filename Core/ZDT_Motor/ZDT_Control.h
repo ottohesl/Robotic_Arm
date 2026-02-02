@@ -28,7 +28,8 @@
  * 宏定义区
  ******************************************************************************/
 #define deuge_mode      0                       /* 调试模式开关：0-关闭，1-开启 */
-#define T               3200                   /* 电机转一圈所需脉冲数 */
+#define T               51200                   /* 电机转一圈所需脉冲数（电机最大脉冲为65536） */
+#define MAX_ANGLE       460.8                   /* 电机角度最大值，超过该角度复位 */
 #define P(angle)        T/360.0f*angle         /* 角度转脉冲数：angle-目标角度(°)，返回对应脉冲数 */
 #define ZDT_MOTOR1      0x01                   /* 电机1地址 */
 #define ZDT_MOTOR2      0x02                   /* 电机2地址 */
@@ -223,7 +224,7 @@ void ZDT_Control_Read_Sys_Params(FDCAN_HandleTypeDef *hfdcan,uint8_t addr, SysPa
 void ZDT_Control_Read_ALL_Params(FDCAN_HandleTypeDef *hfdcan,uint8_t addr);
 void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const uint32_t id);
 /**************************************基本控制函数***************************************/
-void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, uint16_t vel_RPS, float angle) ;
+void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, float vel_RPS, float angle) ;
 void ZDT_MOTOR_VEL(uint8_t addr,Dir dir,uint16_t acc, uint16_t vel_RPS);
 
 #endif //ZDT_CONTROL_H

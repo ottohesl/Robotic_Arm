@@ -250,4 +250,10 @@ SECTIONS
     libgcc.a:* ( * )
   }
 
+    .sram_msg :
+    {
+        . = ALIGN(4);
+        *(.ram)
+    } > RAM_D1
+
 }

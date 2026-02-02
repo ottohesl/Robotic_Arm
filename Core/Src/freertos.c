@@ -79,7 +79,7 @@ const osThreadAttr_t Debug_Task_attributes = {
 osThreadId_t Log_TaskHandle;
 const osThreadAttr_t Log_Task_attributes = {
   .name = "Log_Task",
-  .stack_size = 256 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow3,
 };
 /* Definitions for Solve_Angle */

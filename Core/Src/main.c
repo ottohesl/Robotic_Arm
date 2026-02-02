@@ -41,7 +41,8 @@
 /* USER CODE BEGIN PD */
 motor_t motor1,motor2, motor3, motor4;
 ZDT_FBpara_t z_motor1,z_motor2,z_motor3;
-FDCAN_RxHeaderTypeDef RxHeader;
+FDCAN_RxHeaderTypeDef RxHeader_ZDT;
+FDCAN_RxHeaderTypeDef RxHeader_DAM;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,12 +52,10 @@ FDCAN_RxHeaderTypeDef RxHeader;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MPU_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -68,62 +67,95 @@ uint8_t DAM_MOTOR_RxData[20];
 uint8_t ZDT_MOTOR_rxData[32]={0};
 uint8_t loopback_rx_data[32] = {0};
 FDCAN_RxHeaderTypeDef loopback_rx_header;
+FDCAN_RxHeaderTypeDef loopback_rx_header_DAM;
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs) {
+#if check_num
   if (hfdcan->Instance == FDCAN1) {
     // 获取接收到的消息
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, DAM_MOTOR_RxData) == HAL_OK) {
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader_DAM, DAM_MOTOR_RxData) == HAL_OK) {
       // 解析电机反馈数据（反馈帧ID为0）
-      if(RxHeader.Identifier == 0x01) {
-        dm_motor_fbdata(&motor4, DAM_MOTOR_RxData);
-      }
-    }
-  }
-
-  if (hfdcan->Instance == FDCAN2) {
-#ifdef check_num
-    //获取接收到的消息
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, ZDT_MOTOR_rxData) == HAL_OK) {
-      // 解析电机反馈数据（反馈帧ID为0）
-      uint8_t addr = (uint8_t)(RxHeader.Identifier >> 8);
-      ZDT_FBpara_t *motor = NULL;
+      uint8_t addr = DAM_MOTOR_RxData[0] & 0xF;
+      motor_t *motor = NULL;
       switch(addr) {
-        case ZDT_MOTOR1:
-          motor = get_motor1();
+        case MOTOR1:
+          motor=DAM_get_motor1();
           break;
-        case ZDT_MOTOR2:
-          motor = get_motor2();
+        case MOTOR2:
+          motor=DAM_get_motor2();
           break;
-        case ZDT_MOTOR3:
-          motor = get_motor3();
+        case MOTOR3:
+          motor=DAM_get_motor3();
           break;
         default:
-          OTTO_uart(&huart_debug,"地址错误：0x%02",addr);
+          OTTO_uart(&huart_debug,"DAM地址错误：0x%04X",addr);
           break;
       }
       if (motor != NULL) {
         // 解析反馈数据
-        ZDT_Control_Analyze_FDBack(motor, ZDT_MOTOR_rxData, addr);
+        dm_motor_fbdata(motor, DAM_MOTOR_RxData);
       }
     }
-#endif
-
-#if check_num
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &loopback_rx_header, loopback_rx_data) == HAL_OK) {
+  }
+#else
+  if (hfdcan->Instance == FDCAN1) {
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &loopback_rx_header_DAM, loopback_rx_data) == HAL_OK) {
       // 串口打印帧头信息（扩展帧、ID、长度）
-      OTTO_uart(&huart_debug, "===== FDCAN2回环帧（发送的命令）=====");
+      OTTO_uart(&huart_debug, "===== FDCAN1回环帧（发送的命令）=====");
       OTTO_uart(&huart_debug, "帧类型：扩展帧（29位）");
-      OTTO_uart(&huart_debug, "帧ID：0x%04X", loopback_rx_header.Identifier); // 扩展帧ID用8位十六进制
-      OTTO_uart(&huart_debug, "数据长度：%d 字节", loopback_rx_header.DataLength ); // DLC转字节数
+      OTTO_uart(&huart_debug, "帧ID：0x%04X", loopback_rx_header_DAM.Identifier); // 扩展帧ID用8位十六进制
+      OTTO_uart(&huart_debug, "数据长度：%d 字节", loopback_rx_header_DAM.DataLength ); // DLC转字节数
       OTTO_uart(&huart_debug, "数据内容（十六进制）：");
       // 打印数据内容（逐字节）
-      for (int i = 0; i < loopback_rx_header.DataLength ; i++) {
+      for (int i = 0; i < loopback_rx_header_DAM.DataLength ; i++) {
         OTTO_uart(&huart_debug, "0x%02X ", loopback_rx_data[i]);
       }
       OTTO_uart(&huart_debug, "=====================================");
     }
+  }
 
 #endif
+
+#if check_num
+    if (hfdcan->Instance == FDCAN2) {
+      //获取接收到的消息
+      if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader_ZDT, ZDT_MOTOR_rxData) == HAL_OK) {
+        // 解析电机反馈数据（反馈帧ID为0）
+         uint8_t addr = (RxHeader_ZDT.Identifier>>8)&0xFF;
+        ZDT_FBpara_t *motor = NULL;
+        switch(addr) {
+          case ZDT_MOTOR1:
+            motor = get_motor1();
+            break;
+          case ZDT_MOTOR2:
+            motor = get_motor2();
+            break;
+          case ZDT_MOTOR3:
+            motor = get_motor3();
+            break;
+          default:
+            OTTO_uart(&huart_debug,"ZDT地址错误：0x%04X",addr);
+            break;
+        }
+        if (motor != NULL) {
+          // 解析反馈数据
+          ZDT_Control_Analyze_FDBack(motor, ZDT_MOTOR_rxData, addr);
+        }
+      }
+    }
+#else check_num
+if (hfdcan->Instance == FDCAN2) {
+  if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &loopback_rx_header, loopback_rx_data) == HAL_OK) {
+    // 串口打印帧头信息（扩展帧、ID、长度）
+    OTTO_uart(&huart_debug, "帧ID：0x%04X", loopback_rx_header.Identifier); // 扩展帧ID用8位十六进制
+    OTTO_uart(&huart_debug, "数据长度：%d 字节", loopback_rx_header.DataLength ); // DLC转字节数
+     //打印数据内容（逐字节）
+     for (int i = 0; i < loopback_rx_header.DataLength ; i++) {
+       OTTO_uart(&huart_debug, "0x%02X ", loopback_rx_data[i]);
+     }
+    OTTO_uart(&huart_debug, "=====================================");
   }
+}
+#endif
 }
 //获取电机反馈
 ZDT_FBpara_t* get_motor1() {
@@ -134,6 +166,15 @@ ZDT_FBpara_t*get_motor2() {
 }
 ZDT_FBpara_t* get_motor3() {
   return &z_motor3;
+}
+motor_t* DAM_get_motor1() {
+  return &motor1;
+}
+motor_t* DAM_get_motor2() {
+  return &motor2;
+}
+motor_t* DAM_get_motor3() {
+  return &motor3;
 }
 void ZDT_Motors_Init(void)
 {
@@ -154,7 +195,7 @@ void ZDT_Motors_Init(void)
   z_motor1.S_Vel.Vel_RPM = 0.0f;
   z_motor1.S_Vel.Vel_RPS = 0.0f;
   // 初始化电机2
-  z_motor2.id = ZDT_MOTOR1;
+  z_motor2.id = ZDT_MOTOR2;
   z_motor2.vaild = 0;  // 初始化为无效数据
   z_motor2.S_Flag.IS_ENABLE = false;
   z_motor2.S_Flag.IS_INPLACE = false;
@@ -170,7 +211,7 @@ void ZDT_Motors_Init(void)
   z_motor2.S_Vel.Vel_RPM = 0.0f;
   z_motor2.S_Vel.Vel_RPS = 0.0f;
   // 初始化电机3
-  z_motor3.id = ZDT_MOTOR1;
+  z_motor3.id = ZDT_MOTOR3;
   z_motor3.vaild = 0;  // 初始化为无效数据
   z_motor3.S_Flag.IS_ENABLE = false;
   z_motor3.S_Flag.IS_INPLACE = false;
@@ -186,7 +227,15 @@ void ZDT_Motors_Init(void)
   z_motor3.S_Vel.Vel_RPM = 0.0f;
   z_motor3.S_Vel.Vel_RPS = 0.0f;
 }
-
+void enable_motor(motor_t *motor) {
+  dm_motor_enable(&hfdcan_dam, motor);
+}
+void write_pos_mode(motor_name motor) {
+  write_motor_data(motor,10, pos_mode, 0, 0, 0);
+  HAL_Delay(200);
+  save_motor_data(motor, 10);
+  HAL_Delay(200);
+}
 /* USER CODE END 0 */
 
 /**
@@ -199,9 +248,6 @@ int main(void)
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
-
-  /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -227,26 +273,25 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-   HAL_StatusTypeDef status1=HAL_FDCAN_Start(&hfdcan1);
-  // switch (status1) {
-  //   case HAL_OK:        OTTO_uart(&huart_debug,"fdcan1_初始化成功");break;
-  //   case HAL_BUSY:      OTTO_uart(&huart_debug,"fdcan1_busy");break;
-  //   case HAL_ERROR:     OTTO_uart(&huart_debug,"fdcan1_error");break;
-  //   case HAL_TIMEOUT:   OTTO_uart(&huart_debug,"fdcan1_timeout");break;
-  //   default:break;
-  // }
-  HAL_StatusTypeDef status2=HAL_FDCAN_Start(&hfdcan2);
-  // switch (status2) {
-  //   case HAL_OK:        OTTO_uart(&huart_debug,"fdcan2_初始化成功");break;
-  //   case HAL_BUSY:      OTTO_uart(&huart_debug,"fdcan2_busy");break;
-  //   case HAL_ERROR:     OTTO_uart(&huart_debug,"fdcan2_error");break;
-  //   case HAL_TIMEOUT:   OTTO_uart(&huart_debug,"fdcan2_timeout");break;
-  //   default:break;
-  // }
+  /**************************开启fdcan和fifo中断*********************************/
+  HAL_FDCAN_Start(&hfdcan1);
+  HAL_FDCAN_Start(&hfdcan2);
   HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0);
   HAL_FDCAN_ActivateNotification(&hfdcan2, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0);
-
+  /**************************初始化达妙电机/张大头步进电机***************************/
+  DAM_Motor_Init(&motor1,MOTOR1,20,10);
+  DAM_Motor_Init(&motor2,MOTOR2,20,10);
+  DAM_Motor_Init(&motor3,MOTOR3,20,10);
   ZDT_Motors_Init();
+  /************************初次调用，程序运行后无需再次调用***************************/
+  write_pos_mode(MOTOR1);
+  write_pos_mode(MOTOR2);
+  write_pos_mode(MOTOR3);
+  /*********************************使能达妙电机**********************************/
+  enable_motor(&motor1);
+  enable_motor(&motor2);
+  enable_motor(&motor3);
+  /*****************************************************************************/
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -331,35 +376,6 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
-
- /* MPU Configuration */
-
-void MPU_Config(void)
-{
-  MPU_Region_InitTypeDef MPU_InitStruct = {0};
-
-  /* Disables the MPU */
-  HAL_MPU_Disable();
-
-  /** Initializes and configures the Region and the memory to be protected
-  */
-  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
-  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
-  MPU_InitStruct.BaseAddress = 0x0;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;
-  MPU_InitStruct.SubRegionDisable = 0x87;
-  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
-  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
-  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
-  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
-  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
-  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
-
-  HAL_MPU_ConfigRegion(&MPU_InitStruct);
-  /* Enables the MPU */
-  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
-
-}
 
 /**
   * @brief  Period elapsed callback in non blocking mode
