@@ -27,7 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
-
+#include "6DOF_Control.h"
 #include "DM_motor.h"
 
 /* USER CODE END Includes */
@@ -73,11 +73,29 @@ uint8_t ZDT_MOTOR_rxData[20]={0};
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs) {
 #if check_num
   if (hfdcan->Instance == FDCAN1) {
-    CAN_Rx_Msg_t *can1_rx_msg = &CAN1_Rx_Buf[CAN1_Buf_Index % CAN_QUEUE_LEN];
-    CAN1_Buf_Index++;
     // 获取接收到的消息
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &can1_rx_msg->rx_header, can1_rx_msg->rx_data) == HAL_OK) {
-      osMessageQueuePut(CAN1RX_DataHandle, &can1_rx_msg, 0, 0);
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader_DAM, DAM_MOTOR_RxData) == HAL_OK) {
+      // 解析电机反馈数据（反馈帧ID为0）
+      uint8_t addr = DAM_MOTOR_RxData[0] & 0xF;
+      motor_t *motor = NULL;
+      switch(addr) {
+        case MOTOR1:
+          motor=DAM_get_motor1();
+          break;
+        case MOTOR2:
+          motor=DAM_get_motor2();
+          break;
+        case MOTOR3:
+          motor=DAM_get_motor3();
+          break;
+        default:
+          OTTO_uart(&huart_debug,"DAM地址错误：0x%02X",addr);
+          break;
+      }
+      if (motor != NULL) {
+        // 解析反馈数据
+        dm_motor_fbdata(motor, DAM_MOTOR_RxData);
+      }
     }
   }
 #else
@@ -102,14 +120,32 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 #endif
 
 #if check_num
-    if (hfdcan->Instance == FDCAN2) {
-      //获取接收到的消息
-      CAN_Rx_Msg_t *can2_rx_msg = &CAN2_Rx_Buf[CAN2_Buf_Index % CAN_QUEUE_LEN];
-      CAN2_Buf_Index++;
-      if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &can2_rx_msg->rx_header, can2_rx_msg->rx_data) == HAL_OK) {
-        osMessageQueuePut(CAN2RX_DataHandle, &can2_rx_msg, 0, 0);
+  if (hfdcan->Instance == FDCAN2) {
+    //获取接收到的消息
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader_ZDT, ZDT_MOTOR_rxData) == HAL_OK) {
+      // 解析电机反馈数据（反馈帧ID为0）
+      uint8_t addr = (RxHeader_ZDT.Identifier>>8)&0xFF;
+      ZDT_FBpara_t *motor = NULL;
+      switch(addr) {
+        case ZDT_MOTOR1:
+          motor = get_motor1();
+          break;
+        case ZDT_MOTOR2:
+          motor = get_motor2();
+          break;
+        case ZDT_MOTOR3:
+          motor = get_motor3();
+          break;
+        default:
+          OTTO_uart(&huart_debug,"ZDT地址错误：0x%04X",addr);
+          break;
+      }
+      if (motor != NULL) {
+        // 解析反馈数据
+        ZDT_Control_Analyze_FDBack(motor, ZDT_MOTOR_rxData, addr);
       }
     }
+  }
 #else check_num
 if (hfdcan->Instance == FDCAN2) {
   if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader_ZDT, ZDT_MOTOR_rxData) == HAL_OK) {
@@ -178,7 +214,10 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  /* FPU settings ------------------------------------------------------------*/
+#if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
+  SCB->CPACR |= ((3UL << (10*2))|(3UL << (11*2)));  /* set CP10 and CP11 Full Access */
+#endif
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -218,7 +257,10 @@ int main(void)
   enable_motor(&motor1);
   enable_motor(&motor2);
   enable_motor(&motor3);
-  /*****************************************************************************/
+  /*********************************运动学初始化***********************************/
+
+
+
   /* USER CODE END 2 */
 
   /* Init scheduler */

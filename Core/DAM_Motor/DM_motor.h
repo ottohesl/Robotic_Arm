@@ -19,9 +19,9 @@
  * 如果要自定义地址，上位机连接电机改地址就行
  */
 #define MASTER  0x000
-#define DAM_MOTOR1 = 0x01,
-#define DAM_MOTOR2 = 0x02,
-#define DAM_MOTOR3 = 0x03,
+#define DAM_MOTOR1  0x01
+#define DAM_MOTOR2  0x02
+#define DAM_MOTOR3  0x03
 /**
  * @brief 电机控制模式常量定义
  * 建议使用mit模式，可以涵盖位置速度的控制模式

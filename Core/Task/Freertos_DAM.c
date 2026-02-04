@@ -3,26 +3,26 @@
 #include "fdcan.h"
 #include "ZDT_Control.h"
 #include "ZDT_MOTOR_LOG.h"
-
+#include "6DOF_Control.h"
 void Motor_Control(void *argument)
 {
     int16_t control_motor;
     int16_t now_motor_state;
-    float pos=40;
+    float pos=0;
     /* USER CODE BEGIN Motor_Control */
     /* Infinite loop */
     //ZDT_MOTOR_POSITION(ZDT_MOTOR1,CW,0.2, 0.5, pos);
-    ZDT_MOTOR_POSITION(ZDT_MOTOR2,CW,0.2, 0.5, pos);
-    ZDT_MOTOR_POSITION(ZDT_MOTOR3,CW,0.2, 0.5,pos);
-    ZDT_MOTOR_VEL(ZDT_MOTOR1,CW,0.2, 0.8);
+    // ZDT_MOTOR_POSITION(ZDT_MOTOR2,CW,0.2, 0.5, 0);
+    // ZDT_MOTOR_POSITION(ZDT_MOTOR3,CW,0.2, 0.5,pos);
+    // ZDT_MOTOR_POSITION(ZDT_MOTOR1,CW,0.2, 0.5,80);
 
     //save_pos_zero(&hfdcan_dam, MOTOR3, mit_mode);
     //ZDT_MOTOR_VEL(ZDT_MOTOR1,CW,2, 10);
     for(;;)
     {
-        DAM_MOTOR_POS(MOTOR1 ,0, 0.1);
-        DAM_MOTOR_POS(MOTOR2 ,0, 0.1);
-        DAM_MOTOR_POS(MOTOR3 ,0, 0.1);
+        // DAM_MOTOR_POS(MOTOR1 ,0, 0.1);
+        // DAM_MOTOR_POS(MOTOR2 ,0, 0.1);
+        // DAM_MOTOR_POS(MOTOR3 ,0, 0.1);
         // osDelay(3000);
         // DAM_MOTOR_POS(MOTOR1 ,-60, 0.1);
         // DAM_MOTOR_POS(MOTOR2 ,-30, 0.1);
@@ -39,26 +39,18 @@ void Motor_Control(void *argument)
     }
     /* USER CODE END Motor_Control */
 }
-
 void Solve(void *argument)
 {
-    int16_t get_pos;
-    int16_t control_motor;
-    char put_message;
 
-
-    /* USER CODE BEGIN Solve */
-    /* Infinite loop */
     for(;;)
     {
-        // if (osMessageQueueGet(&Solve_AngleHandle,&get_pos,0,osWaitForever)==osOK) {
-        //     //传递目标了
-        //     //开始计算
-        //     osMessageQueuePut(&Target_PosHandle,&put_message,0,osWaitForever);
-        // }
-        osDelay(50);
+        Joints_FK(10,10,10,-20,30,0);
+        Joints_IK(141.05  ,9.59,414.06);
+        Joints_FK(10.01 ,9.97 ,-10.05  ,-13.06, 49.30 ,-8.91 );
+        osDelay(10000);
+        OTTO_uart(&huart_debug, "\n🔄 重复正逆解测试...");
+        // 重新执行步骤3-7（可封装为函数）
     }
-    /* USER CODE END Solve */
 }
 
 void Camera_Data(void *argument)
@@ -91,8 +83,9 @@ void Debug(void *argument) {
                 case MOTOR3: motor = DAM_get_motor3(); break;
                 default:
                     OTTO_uart(&huart_debug,"DAM地址错误：0x%02X",addr);
-                    continue; // 跳过错误地址
+                    break;
             }
+
             if (motor != NULL) {
                 dm_motor_fbdata(motor, can1_rx_msg.rx_data);
             }
@@ -110,7 +103,7 @@ void Debug(void *argument) {
                 case ZDT_MOTOR3:
                     motor = get_motor3();break;
                 default:
-                    OTTO_uart(&huart_debug,"ZDT地址错误：0x%04X",addr);continue;
+                    OTTO_uart(&huart_debug,"ZDT地址错误：0x%04X",addr); break;
             }
             if (motor != NULL) {
                 // 解析反馈数据
@@ -185,7 +178,7 @@ void Log(void *argument)
             DAM_Motor_PV_State(D[i]);
         }
         //周期性延迟（固定频率执行）
-        osDelay(10);
+        osDelay(10000);
     }
     /* USER CODE END Log */
 }

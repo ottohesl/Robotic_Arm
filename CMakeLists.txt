@@ -41,11 +41,13 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/DAM_Motor/DM_motor.h
         Core/ottohesl/ottohesl.c
         Core/ottohesl/ottohesl.h
-        Core/DH_Control
+        Core/6DOF_Algorithm
         Core/ZDT_Motor/ZDT_MOTOR_LOG.c
         Core/ZDT_Motor/ZDT_MOTOR_LOG.h
         Core/DAM_Motor/DM_Motor_LOG.c
         Core/DAM_Motor/DM_Motor_LOG.h
+        Core/6DOF_Algorithm/6DOF_Control.c
+        Core/6DOF_Algorithm/6DOF_Control.h
 )
 
 # Add STM32CubeMX generated sources
@@ -69,6 +71,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         Core/Task/
         Core/DAM_Motor/
         Core/ottohesl/
+        Core/6DOF_Algorithm
 )
 
 # Add project symbols (macros)
@@ -88,3 +91,21 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 set(COMMON_FLAGS "-u _printf_float")  # 启用浮点printf支持
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS}")
+# Add include paths
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        # Add user defined include paths
+        "${CMAKE_SOURCE_DIR}/Drivers/CMSIS/DSP/Include"
+)
+# Add project symbols (macros)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+        # Add user defined symbols
+        ARM_MATH_CM7
+)
+
+# Add linked libraries
+target_link_libraries(${CMAKE_PROJECT_NAME}
+stm32cubemx
+# Add user defined libraries
+"${CMAKE_SOURCE_DIR}/Drivers/CMSIS/DSP/Lib/GCC/libarm_cortexM7lfdp_math.a"
+)
+

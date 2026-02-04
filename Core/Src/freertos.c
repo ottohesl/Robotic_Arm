@@ -51,14 +51,14 @@
 osThreadId_t Motor_Control_THandle;
 const osThreadAttr_t Motor_Control_T_attributes = {
   .name = "Motor_Control_T",
-  .stack_size = 1024 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for Solve_Task */
 osThreadId_t Solve_TaskHandle;
 const osThreadAttr_t Solve_Task_attributes = {
   .name = "Solve_Task",
-  .stack_size = 1024 * 4,
+  .stack_size = 2048 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for Camera_Data_Tas */
@@ -72,7 +72,7 @@ const osThreadAttr_t Camera_Data_Tas_attributes = {
 osThreadId_t Debug_TaskHandle;
 const osThreadAttr_t Debug_Task_attributes = {
   .name = "Debug_Task",
-  .stack_size = 512 * 4,
+  .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* Definitions for Log_Task */

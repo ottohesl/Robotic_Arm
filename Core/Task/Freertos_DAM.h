@@ -2,6 +2,8 @@
 #ifndef FREERTOS_DAM_H
 #define FREERTOS_DAM_H
 #include <stdbool.h>
+
+#include "6DOF_Control.h"
 #include "main.h"
 #include "cmsis_os2.h"
 #include "FreeRTOS.h"
@@ -28,9 +30,6 @@ typedef struct {
     uint8_t motor_state[6];    // 6轴电机工作状态（0：故障，1：正常）
     uint8_t solve_success;     // 对应的运动学求解状态（透传，方便调试关联）
 } Motor_State_Msg;
-
-
-
 
 
 

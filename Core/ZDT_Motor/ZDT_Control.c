@@ -355,6 +355,26 @@ void ZDT_Control_Origin_Modify_Params(FDCAN_HandleTypeDef *hfdcan,uint8_t addr, 
     // 发送CAN指令
     Send_Can(hfdcan,cmd, 20);
 }
+/**
+ * @brief  更改电机回零位置
+ * @param  hfdcan: FDCAN句柄指针
+ * @param  addr: 电机地址
+ * @retval 无
+ * @note   指令格式：地址 + 0x93 + 0x88 + 是否存储标志 + 校验字节
+ */
+void ZDT_Control_Origin_SET(FDCAN_HandleTypeDef *hfdcan,uint8_t addr) {
+    uint8_t cmd[16] = {0};
+
+    // 装载触发回零指令
+    cmd[0] =  addr;                       // 电机地址
+    cmd[1] =  0x93;                       // 触发回零功能码
+    cmd[2] =  0x88;
+    cmd[3] =  0x01;
+    cmd[4] =  0x6B;                       // 校验字节
+
+    // 发送CAN指令
+    Send_Can(hfdcan,cmd,5);
+}
 
 /**
  * @brief  触发电机回零指令发送
@@ -704,7 +724,7 @@ void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, float vel_RPS, float 
     uint16_t vel=vel_RPS*60.0f;     // 转/秒 → 转/分钟
 
     // 发送梯形位置模式指令
-    ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,RELATIVE_POS,SIN);
+    ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,ABSOLUTE_POS,SIN);
     osDelay(20); // 延时确保指令发送完成
 }
 
