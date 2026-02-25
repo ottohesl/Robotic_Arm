@@ -31,9 +31,9 @@
 #define T               51200                   /* 电机转一圈所需脉冲数（电机最大脉冲为65536） */
 #define MAX_ANGLE       460.8                   /* 电机角度最大值，超过该角度复位 */
 #define P(angle)        T/360.0f*angle         /* 角度转脉冲数：angle-目标角度(°)，返回对应脉冲数 */
-#define ZDT_MOTOR1      0x01                   /* 电机1地址 */
-#define ZDT_MOTOR2      0x02                   /* 电机2地址 */
-#define ZDT_MOTOR3      0x03                   /* 电机3地址 */
+#define ZDT_MOTOR1      0x04                   /* 电机1地址 */
+#define ZDT_MOTOR2      0x05                   /* 电机2地址 */
+#define ZDT_MOTOR3      0x06                   /* 电机3地址 */
 #define ZDT_ALL         0x00                   /* 所有电机地址 */
 #define CHECK_SUM       0x6B                   /* CAN通信校验字节固定值 */
 
@@ -89,8 +89,8 @@ typedef enum {
  * @brief 电机旋转方向枚举
  */
 typedef enum {
-    CW  = 0x00,   /* 顺时针方向(正方向) */
-    CCW = 0x01,   /* 逆时针方向(负方向) */
+    CW  = 0x01,   /* 顺时针方向(正方向) */
+    CCW = 0x00,   /* 逆时针方向(负方向) */
 }Dir;
 
 /**
@@ -218,6 +218,7 @@ void ZDT_Control_Direct_Pos_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir di
 void ZDT_Control_Stop_Motor(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Sync sync);
 void ZDT_Control_Sync_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr) ;
 void ZDT_Control_Origin_Modify_Params(FDCAN_HandleTypeDef *hfdcan,uint8_t addr, bool svF, O_Mode o_mode, uint8_t o_dir, uint16_t o_vel, uint32_t o_tm, uint16_t sl_vel, uint16_t sl_ma, uint16_t sl_ms, bool potF);
+void ZDT_Control_Origin_SET(FDCAN_HandleTypeDef *hfdcan,uint8_t addr) ;
 void ZDT_Control_Origin_Trigger_Return(FDCAN_HandleTypeDef *hfdcan,uint8_t addr, uint8_t o_mode, Sync sync);
 void ZDT_Control_Origin_Interrupt(FDCAN_HandleTypeDef *hfdcan,uint8_t addr);
 void ZDT_Control_Read_Sys_Params(FDCAN_HandleTypeDef *hfdcan,uint8_t addr, SysParams_t s);
@@ -225,6 +226,7 @@ void ZDT_Control_Read_ALL_Params(FDCAN_HandleTypeDef *hfdcan,uint8_t addr);
 void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const uint32_t id);
 /**************************************基本控制函数***************************************/
 void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, float vel_RPS, float angle) ;
+void ZDT_MOTOR_ABS_POS(uint8_t addr, float acc, float vel_RPS, float target_angle);
 void ZDT_MOTOR_VEL(uint8_t addr,Dir dir,uint16_t acc, uint16_t vel_RPS);
 
 #endif //ZDT_CONTROL_H

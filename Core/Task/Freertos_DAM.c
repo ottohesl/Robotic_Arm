@@ -1,9 +1,4 @@
 #include "Freertos_DAM.h"
-#include "DM_Motor_LOG.h"
-#include "fdcan.h"
-#include "ZDT_Control.h"
-#include "ZDT_MOTOR_LOG.h"
-#include "6DOF_Control.h"
 void Motor_Control(void *argument)
 {
     int16_t control_motor;
@@ -11,19 +6,13 @@ void Motor_Control(void *argument)
     float pos=0;
     /* USER CODE BEGIN Motor_Control */
     /* Infinite loop */
-    //ZDT_MOTOR_POSITION(ZDT_MOTOR1,CW,0.2, 0.5, pos);
-    // ZDT_MOTOR_POSITION(ZDT_MOTOR2,CW,0.2, 0.5, 0);
-    // ZDT_MOTOR_POSITION(ZDT_MOTOR3,CW,0.2, 0.5,pos);
-    // ZDT_MOTOR_POSITION(ZDT_MOTOR1,CW,0.2, 0.5,80);
 
-    //save_pos_zero(&hfdcan_dam, MOTOR3, mit_mode);
-    //ZDT_MOTOR_VEL(ZDT_MOTOR1,CW,2, 10);
     for(;;)
     {
-        // DAM_MOTOR_POS(MOTOR1 ,0, 0.1);
-        // DAM_MOTOR_POS(MOTOR2 ,0, 0.1);
-        // DAM_MOTOR_POS(MOTOR3 ,0, 0.1);
-        // osDelay(3000);
+        // if (i<60) {
+        //     ZDT_MOTOR_POSITION(ZDT_MOTOR2,CW,0.2, 0.1, i);
+        //     i++;
+        // }
         // DAM_MOTOR_POS(MOTOR1 ,-60, 0.1);
         // DAM_MOTOR_POS(MOTOR2 ,-30, 0.1);
         // DAM_MOTOR_POS(MOTOR3 ,-50, 0.1);
@@ -35,21 +24,37 @@ void Motor_Control(void *argument)
         //     osMessageQueuePut(&Motor_StateHandle,&now_motor_state,0,osWaitForever);
         // }
 
-        osDelay(500);
+        osDelay(50);
     }
     /* USER CODE END Motor_Control */
 }
 void Solve(void *argument)
 {
-
+      //Joints_FK(63.43, 40.47 ,-70.16   ,0,29.96,-63.66);
+    //  Joints_FK(90.00,17.23,-24.89,0,7.67,0);
+    // Joints_IK_Debug(0.0f, 200, 200.0f, 0.0f, 0.0f, 0.0f);
+    //  //Joints_FK(0, 38.97,0,0,-38.97,0);
+    //Joints_FK(0,60,-90,0,60,0);        //定义初始位置
+   // osDelay(3000);
+    //Joints_IK_Scan();
+    int i=0;
     for(;;)
     {
-        Joints_FK(10,10,10,-20,30,0);
-        Joints_IK(141.05  ,9.59,414.06);
-        Joints_FK(10.01 ,9.97 ,-10.05  ,-13.06, 49.30 ,-8.91 );
-        osDelay(10000);
-        OTTO_uart(&huart_debug, "\n🔄 重复正逆解测试...");
-        // 重新执行步骤3-7（可封装为函数）
+        // Joints_IK_BatchTest(-200.0f, 200.0f, 50.0f,   // X范围：-200~200mm，步长50mm
+        //          -200.0f, 200.0f, 50.0f,   // Y范围：-200~200mm，步长50mm
+        //          100.0f,  280.0f, 50.0f,   // Z范围：100~300mm，步长50mm
+        //          0.0f, 0.0f, 0.0f);        // 目标姿态为0°
+        Joints_IK(100,200,280);
+        // if (i<=200) {
+        //     Joints_IK(i,200,200);
+        //     i++;
+        // }
+       // Joints_IK(0,200,200);
+        //Joints_IK_Continuous_Test(&huart_debug);
+        //Joints_FK(0,-20,10,12,0,0);
+        // Joints_FK(60,60,-90,30,-60,0);
+        osDelay(200);
+
     }
 }
 
@@ -61,57 +66,18 @@ void Camera_Data(void *argument)
     for(;;)
     {
         // osMessageQueuePut(&Solve_AngleHandle,&pos,0,osWaitForever);
-        osDelay(100);
+        osDelay(1000);
     }
     /* USER CODE END Camera_Data */
 }
 
-void Debug(void *argument) {
-    CAN_Rx_Msg_t can1_rx_msg;
-    CAN_Rx_Msg_t can2_rx_msg;
+void OLED(void *argument){
     /* USER CODE BEGIN Debug */
     /* Infinite loop */
     for(;;)
     {
-        //解析反馈帧
-        if (osMessageQueueGet(CAN1RX_DataHandle, &can1_rx_msg, NULL, osWaitForever) == osOK) {
-            uint8_t addr = can1_rx_msg.rx_data[0] & 0xF;
-            motor_t *motor = NULL;
-            switch(addr) {
-                case MOTOR1: motor = DAM_get_motor1(); break;
-                case MOTOR2: motor = DAM_get_motor2(); break;
-                case MOTOR3: motor = DAM_get_motor3(); break;
-                default:
-                    OTTO_uart(&huart_debug,"DAM地址错误：0x%02X",addr);
-                    break;
-            }
-
-            if (motor != NULL) {
-                dm_motor_fbdata(motor, can1_rx_msg.rx_data);
-            }
-        }
-
-        if (osMessageQueueGet(CAN2RX_DataHandle, &can2_rx_msg, NULL, osWaitForever) == osOK) {
-            // 解析电机反馈数据（反馈帧ID为0）
-            uint8_t addr = (can2_rx_msg.rx_header.Identifier>>8)&0xFF;
-            ZDT_FBpara_t *motor = NULL;
-            switch(addr) {
-                case ZDT_MOTOR1:
-                    motor = get_motor1();break;
-                case ZDT_MOTOR2:
-                    motor = get_motor2();break;
-                case ZDT_MOTOR3:
-                    motor = get_motor3();break;
-                default:
-                    OTTO_uart(&huart_debug,"ZDT地址错误：0x%04X",addr); break;
-            }
-            if (motor != NULL) {
-                // 解析反馈数据
-                ZDT_Control_Analyze_FDBack(motor, can2_rx_msg .rx_data, addr);
-
-            }
-            osDelay(100);
-        }
+        oled_loop();
+        osDelay(20);
         /* USER CODE END Debug */
     }
 }
@@ -132,7 +98,7 @@ void Log(void *argument)
     // 初始化延迟
     osDelay(100);
 
-    OTTO_uart(&huart_debug,"✅/*******************电机日志任务启动*******************/");
+    //OTTO_uart(&huart_debug,"✅/*******************电机日志任务启动*******************/");
 #if DEBUG_MODE
     OTTO_uart(&huart_debug,"✅ 调试模式");
 #else
@@ -169,16 +135,16 @@ void Log(void *argument)
         // 遍历所有电机，读取参数并打印日志
         for (uint8_t i = 0; i<ZDT_MOTOR_NUM; i++)
         {
-            ZDT_Log_PrintCmdResult(Z[i]);
+            //ZDT_Log_PrintCmdResult(Z[i]);
         }
 #endif
 /********************************达妙电机状态打印*********************************/
         for (uint8_t i = 0; i<DAM_MOTOR_NUM ; i++)
         {
-            DAM_Motor_PV_State(D[i]);
+           // DAM_Motor_PV_State(D[i]);
         }
         //周期性延迟（固定频率执行）
-        osDelay(10000);
+        osDelay(100);
     }
     /* USER CODE END Log */
 }

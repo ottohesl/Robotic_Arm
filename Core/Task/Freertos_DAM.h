@@ -2,12 +2,15 @@
 #ifndef FREERTOS_DAM_H
 #define FREERTOS_DAM_H
 #include <stdbool.h>
-
 #include "6DOF_Control.h"
 #include "main.h"
 #include "cmsis_os2.h"
 #include "FreeRTOS.h"
-
+#include "DM_Motor_LOG.h"
+#include "fdcan.h"
+#include "ZDT_Control.h"
+#include "ZDT_MOTOR_LOG.h"
+#include "OLED_Menu.h"
 #define DEBUG_MODE 0
 #define DAM_MOTOR_NUM 3
 #define ZDT_MOTOR_NUM 3

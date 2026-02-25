@@ -58,7 +58,7 @@ const osThreadAttr_t Motor_Control_T_attributes = {
 osThreadId_t Solve_TaskHandle;
 const osThreadAttr_t Solve_Task_attributes = {
   .name = "Solve_Task",
-  .stack_size = 2048 * 4,
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for Camera_Data_Tas */
@@ -68,11 +68,11 @@ const osThreadAttr_t Camera_Data_Tas_attributes = {
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for Debug_Task */
-osThreadId_t Debug_TaskHandle;
-const osThreadAttr_t Debug_Task_attributes = {
-  .name = "Debug_Task",
-  .stack_size = 128 * 4,
+/* Definitions for OLED_Task */
+osThreadId_t OLED_TaskHandle;
+const osThreadAttr_t OLED_Task_attributes = {
+  .name = "OLED_Task",
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* Definitions for Log_Task */
@@ -121,7 +121,7 @@ const osMutexAttr_t uart_log_mutex_attributes = {
 void Motor_Control(void *argument);
 void Solve(void *argument);
 void Camera_Data(void *argument);
-void Debug(void *argument);
+void OLED(void *argument);
 void Log(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -181,8 +181,8 @@ void MX_FREERTOS_Init(void) {
   /* creation of Camera_Data_Tas */
   Camera_Data_TasHandle = osThreadNew(Camera_Data, NULL, &Camera_Data_Tas_attributes);
 
-  /* creation of Debug_Task */
-  Debug_TaskHandle = osThreadNew(Debug, NULL, &Debug_Task_attributes);
+  /* creation of OLED_Task */
+  OLED_TaskHandle = osThreadNew(OLED, NULL, &OLED_Task_attributes);
 
   /* creation of Log_Task */
   Log_TaskHandle = osThreadNew(Log, NULL, &Log_Task_attributes);
@@ -251,22 +251,22 @@ __weak void Camera_Data(void *argument)
   /* USER CODE END Camera_Data */
 }
 
-/* USER CODE BEGIN Header_Debug */
+/* USER CODE BEGIN Header_OLED */
 /**
-* @brief Function implementing the Debug_Task thread.
+* @brief Function implementing the OLED_Task thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_Debug */
-__weak void Debug(void *argument)
+/* USER CODE END Header_OLED */
+__weak void OLED(void *argument)
 {
-  /* USER CODE BEGIN Debug */
+  /* USER CODE BEGIN OLED */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END Debug */
+  /* USER CODE END OLED */
 }
 
 /* USER CODE BEGIN Header_Log */

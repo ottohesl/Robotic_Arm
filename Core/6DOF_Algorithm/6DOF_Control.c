@@ -124,6 +124,9 @@ static void EulerAngleToRotMat(const float* _eulerAngles, float* _rotationM)
  */
 void MOTOR_SetPosVal(MOTOR_t motor, float target_pos, float target_vel)
 {
+    if (target_vel<0.01f) {
+        target_vel=36.0f;
+    }
     //度/秒 -》 转/秒
     float target_vel_RPS = target_vel/360.0f;
     /* 达妙电机控制（关节1-3） */
@@ -174,39 +177,36 @@ bool Joint6D_CheckLimit(const Joint6D_t* joints, const float* min_angle, const f
 bool IKSolves_SelectBest(const IKSolves_t* solves, const Joint6D_t* current_joints,
                          const float* min_angle, const float* max_angle, Joint6D_t* best_joints)
 {
-    float min_diff = 10000.0f; // 初始化为极大值
+    float min_diff = 10000.0f;
     int best_idx = -1;
 
-    // 遍历8组解，筛选有效且差值最小的解
     for (int i = 0; i < 8; i++) {
-        // 跳过无效/奇异解
         if (solves->solFlag[i][0] != 1 || solves->solFlag[i][1] != 1 || solves->solFlag[i][2] != 1) {
             continue;
         }
-        // 检查限位
         if (!Joint6D_CheckLimit(&solves->config[i], min_angle, max_angle)) {
             continue;
         }
 
-        // 计算与当前关节角的总差值（绝对值和）
+        // 计算差值：优先选择肘下解（J2<0 且 J3<0）
         float diff = 0.0f;
         for (int j = 0; j < 6; j++) {
             diff += fabsf(solves->config[i].a[j] - current_joints->a[j]);
         }
+        // 对肘下解加权（差值乘以0.5，优先选中）
+        if (solves->config[i].a[1] < 0 && solves->config[i].a[2] < 0) {
+            diff *= 0.5f;
+        }
 
-        // 更新最优解
         if (diff < min_diff) {
             min_diff = diff;
             best_idx = i;
         }
     }
 
-    // 无有效解
     if (best_idx == -1) {
         return false;
     }
-
-    // 复制最优解
     memcpy(best_joints, &solves->config[best_idx], sizeof(Joint6D_t));
     return true;
 }
@@ -241,7 +241,6 @@ float Joint6D_CalcSyncVel(const Joint6D_t* current_joints, const Joint6D_t* targ
         }
     }
     float total_time = max_delta / max_vel[max_idx];
-
     // 计算各关节同步速度（保证同时到达）
     for (int i = 0; i < 6; i++) {
         if (delta[i] < 0.001f) {
@@ -263,9 +262,9 @@ bool Joint6D_ReadFromMotor(Joint6D_t* current_joints)
 {
     // 对接你的电机底层：读取每个电机的当前位置（°）
     // 示例：需替换为实际的电机位置读取接口
-    current_joints->a[0] = ((float)DAM_get_motor1()->para.pos)* 180/ M_PI; // 关节1（达妙1）
-    current_joints->a[1] = ((float)DAM_get_motor2()->para.pos)* 180/ M_PI; // 关节2（达妙2）
-    current_joints->a[2] = ((float)DAM_get_motor3()->para.pos)* 180/ M_PI; // 关节3（达妙3）
+    current_joints->a[0] = ((float)DAM_get_motor1()->para.pos)* RAD_TO_DEG; // 关节1（达妙1）
+    current_joints->a[1] = ((float)DAM_get_motor2()->para.pos)* RAD_TO_DEG; // 关节2（达妙2）
+    current_joints->a[2] = ((float)DAM_get_motor3()->para.pos)* RAD_TO_DEG; // 关节3（达妙3）
     current_joints->a[3] = get_motor1()->S_Cpos; // 关节4（张大头1）
     current_joints->a[4] = get_motor2()->S_Cpos; // 关节5（张大头2）
     current_joints->a[5] = get_motor3()->S_Cpos; // 关节6（张大头3）
@@ -288,17 +287,13 @@ bool DOF6_MoveJ(DOF6Kinematic* kinematic, const Joint6D_t* current_joints,
                 const float* min_angle, const float* max_angle)
 {
     // // 1. 检查目标关节角是否超限位
-    // if (!Joint6D_CheckLimit(target_joints, min_angle, max_angle)) {
-    //     return false; // 超限位，拒绝下发
-    // }
+    if (!Joint6D_CheckLimit(target_joints, min_angle, max_angle)) {
+        return false; // 超限位，拒绝下发
+    }
 
     // 2. 计算6轴同步速度
     float target_vel[6];
     Joint6D_CalcSyncVel(current_joints, target_joints, max_vel, target_vel);
-    // for (int i = 0; i < 6; i++) {
-    //     OTTO_uart(&huart_debug,"target_vel:%f" ,target_vel[i]);
-    // }
-
     // 3. 下发每个关节的目标位置和速度到电机
     MOTOR_SetPosVal(MOTOR_1, target_joints->a[0], target_vel[0]);
     MOTOR_SetPosVal(MOTOR_2, target_joints->a[1], target_vel[1]);
@@ -364,36 +359,44 @@ void DOF6Kinematic_Init(DOF6Kinematic* kinematic, float L_BS, float D_BS,
     kinematic->armConfig.L_FOREARM = L_FA;
     kinematic->armConfig.D_ELBOW = D_EW;
     kinematic->armConfig.L_WRIST = L_WT;
-    
     /* 初始化DH参数矩阵（标准DH表示法） */
+    // float tmp_DH_matrix[6][4] = {
+    //     //-(float) 5*M_PI/6
+    //     //  theta,     d,             a,             alpha
+    //     {0.0f,            kinematic->armConfig.L_BASE,    kinematic->armConfig.D_BASE, -(float) M_PI_2},
+    //     {-(float) 5*M_PI/6, 0.0f,                kinematic->armConfig.L_ARM,  0.0f},
+    //     {(float) 5*M_PI/6,  kinematic->armConfig.D_ELBOW,   0.0f,             (float) M_PI_2},
+    //     {0.0f,            kinematic->armConfig.L_FOREARM, 0.0f,             -(float) M_PI_2},
+    //     {M_PI/2,            0.0f,                0.0f,             (float) M_PI_2},
+    //     {0.0f,            kinematic->armConfig.L_WRIST, 0.0f, 0.0f}
+    // };
     float tmp_DH_matrix[6][4] = {
-        /* theta_home(rad), d(m), a(m), alpha(rad) */
-        {0.0f,            kinematic->armConfig.L_BASE,    kinematic->armConfig.D_BASE, -(float)M_PI_2},
-        {-(float)M_PI_2,  0.0f,                kinematic->armConfig.L_ARM,    0.0f},
-        {(float)M_PI_2,   kinematic->armConfig.D_ELBOW,  0.0f,                (float)M_PI_2},
-        {0.0f,            kinematic->armConfig.L_FOREARM, 0.0f,               -(float)M_PI_2},
-        {0.0f,            0.0f,                0.0f,                (float)M_PI_2},
-        {0.0f,            kinematic->armConfig.L_WRIST,  0.0f,                0.0f}
+        {0.0f,            kinematic->armConfig.L_BASE,    kinematic->armConfig.D_BASE, -(float) M_PI_2},
+        {-(float) M_PI_2, 0.0f,                kinematic->armConfig.L_ARM,  0.0f},
+        {(float) M_PI_2,  kinematic->armConfig.D_ELBOW,   0.0f,             (float) M_PI_2},
+        {0.0f,            kinematic->armConfig.L_FOREARM, 0.0f,             -(float) M_PI_2},
+        {0.0f,            0.0f,                0.0f,             (float) M_PI_2},
+        {0.0f,            kinematic->armConfig.L_WRIST, 0.0f, 0.0f}
     };
     memcpy(kinematic->DH_matrix, tmp_DH_matrix, sizeof(tmp_DH_matrix));
-    
+
     /* 初始化连杆向量（在各自坐标系中的表示） */
     float tmp_L1_bs[3] = {kinematic->armConfig.D_BASE, -kinematic->armConfig.L_BASE, 0.0f};
     memcpy(kinematic->L1_base, tmp_L1_bs, sizeof(tmp_L1_bs));
-    
+
     float tmp_L2_se[3] = {kinematic->armConfig.L_ARM, 0.0f, 0.0f};
     memcpy(kinematic->L2_arm, tmp_L2_se, sizeof(tmp_L2_se));
-    
+
     float tmp_L3_ew[3] = {-kinematic->armConfig.D_ELBOW, 0.0f, kinematic->armConfig.L_FOREARM};
     memcpy(kinematic->L3_elbow, tmp_L3_ew, sizeof(tmp_L3_ew));
-    
+
     float tmp_L6_wt[3] = {0.0f, 0.0f, kinematic->armConfig.L_WRIST};
     memcpy(kinematic->L6_wrist, tmp_L6_wt, sizeof(tmp_L6_wt));
-    
+
     /* 初始化中间计算变量 */
     kinematic->l_se_2 = kinematic->armConfig.L_ARM * kinematic->armConfig.L_ARM;
     kinematic->l_se = kinematic->armConfig.L_ARM;
-    kinematic->l_ew_2 = kinematic->armConfig.L_FOREARM * kinematic->armConfig.L_FOREARM + 
+    kinematic->l_ew_2 = kinematic->armConfig.L_FOREARM * kinematic->armConfig.L_FOREARM +
                         kinematic->armConfig.D_ELBOW * kinematic->armConfig.D_ELBOW;
     kinematic->l_ew = 0.0f;   /* 延迟计算，避免重复计算 */
     kinematic->atan_e = 0.0f; /* 延迟计算，避免重复计算 */
@@ -407,81 +410,79 @@ void DOF6Kinematic_Init(DOF6Kinematic* kinematic, float L_BS, float D_BS,
  * @return bool 计算成功标志（总是返回true）
  * @note 使用DH参数法和矩阵乘法计算末端位姿
  */
-bool DOF6_SolveFK(const DOF6Kinematic* kinematic, const Joint6D_t* _inputJoint6D, 
+bool  DOF6_SolveFK(const DOF6Kinematic* kinematic, const Joint6D_t* _inputJoint6D,
                   Pose6D_t* _outputPose6D)
 {
-    float q_in[6];      /* 输入关节角度（弧度） */
-    float q[6];         /* 实际关节角度（包含偏移） */
-    float cosq, sinq;   /* 关节角度三角函数值 */
-    float cosa, sina;   /* DH参数alpha的三角函数值 */
-    float P06[6];       /* 末端位置+欧拉角（前3个为位置，后3个为欧拉角） */
-    float R06[9];       /* 末端旋转矩阵 */
-    float R[6][9];      /* 各关节变换矩阵 */
-    float R02[9];       /* 基座到关节2的变换 */
-    float R03[9];       /* 基座到关节3的变换 */
-    float R04[9];       /* 基座到关节4的变换 */
-    float R05[9];       /* 基座到关节5的变换 */
-    float L0_bs[3];     /* 基座连杆在基座坐标系中的向量 */
-    float L0_se[3];     /* 大臂连杆在基座坐标系中的向量 */
-    float L0_ew[3];     /* 肘部连杆在基座坐标系中的向量 */
-    float L0_wt[3];     /* 腕部连杆在基座坐标系中的向量 */
-    
-    /* 将关节角度从度转换为弧度 */
+    float q[6];                     // 实际关节角（弧度，含home offset）
+    float T_t[6][16];                 // 每个关节的4x4齐次变换矩阵（行优先，16元素）
+    float T_accum[16];              // 累积变换矩阵
+    float P06[3];                   // 末端位置（米）
+    float R06[9];                   // 末端旋转矩阵
+
+    // 1. 将输入角度转为弧度并加上home offset
     for (int i = 0; i < 6; i++) {
-        q_in[i] = _inputJoint6D->a[i] / RAD_TO_DEG;
+        q[i] = _inputJoint6D->a[i] * (float)M_PI / 180.0f + kinematic->DH_matrix[i][0];
     }
-    
-    /* 计算各关节的变换矩阵 */
+
+    // 2. 构建每个关节的齐次变换矩阵 Ti (从关节i到关节i+1)
     for (int i = 0; i < 6; i++) {
-        q[i] = q_in[i] + kinematic->DH_matrix[i][0];  /* 加上theta_home偏移 */
-        cosq = cosf(q[i]);
-        sinq = sinf(q[i]);
-        cosa = cosf(kinematic->DH_matrix[i][3]);  /* alpha角度 */
-        sina = sinf(kinematic->DH_matrix[i][3]);
-        
-        /* 标准DH变换矩阵 */
-        R[i][0] = cosq;
-        R[i][1] = -cosa * sinq;
-        R[i][2] = sina * sinq;
-        R[i][3] = sinq;
-        R[i][4] = cosa * cosq;
-        R[i][5] = -sina * cosq;
-        R[i][6] = 0.0f;
-        R[i][7] = sina;
-        R[i][8] = cosa;
+        float ct = cosf(q[i]);
+        float st = sinf(q[i]);
+        float ca = cosf(kinematic->DH_matrix[i][3]); // alpha的cos
+        float sa = sinf(kinematic->DH_matrix[i][3]); // alpha的sin
+        float d  = kinematic->DH_matrix[i][1];       // d
+        float a  = kinematic->DH_matrix[i][2];       // a
+
+        // 标准DH变换矩阵（行优先）
+        T_t[i][0]  = ct;      T_t[i][1]  = -st*ca;   T_t[i][2]  =  st*sa;   T_t[i][3]  = a*ct;
+        T_t[i][4]  = st;      T_t[i][5]  =  ct*ca;   T_t[i][6]  = -ct*sa;   T_t[i][7]  = a*st;
+        T_t[i][8]  = 0.0f;    T_t[i][9]  =  sa;      T_t[i][10] =  ca;      T_t[i][11] = d;
+        T_t[i][12] = 0.0f;    T_t[i][13] = 0.0f;     T_t[i][14] = 0.0f;     T_t[i][15] = 1.0f;
     }
-    
-    /* 累积变换矩阵，得到从基座到各关节的变换 */
-    MatMultiply(R[0], R[1], R02, 3, 3, 3);
-    MatMultiply(R02, R[2], R03, 3, 3, 3);
-    MatMultiply(R03, R[3], R04, 3, 3, 3);
-    MatMultiply(R04, R[4], R05, 3, 3, 3);
-    MatMultiply(R05, R[5], R06, 3, 3, 3);
-    
-    /* 计算各连杆在基座坐标系中的位置 */
-    MatMultiply(R[0], kinematic->L1_base, L0_bs, 3, 3, 1);
-    MatMultiply(R02, kinematic->L2_arm, L0_se, 3, 3, 1);
-    MatMultiply(R03, kinematic->L3_elbow, L0_ew, 3, 3, 1);
-    MatMultiply(R06, kinematic->L6_wrist, L0_wt, 3, 3, 1);
-    
-    /* 计算末端位置：各连杆向量之和 */
-    for (int i = 0; i < 3; i++) {
-        P06[i] = L0_bs[i] + L0_se[i] + L0_ew[i] + L0_wt[i];
+
+    // 3. 累积变换：T06 = T0 * T1 * T2 * T3 * T4 * T5
+    // 初始化累积矩阵为单位矩阵
+    for (int i = 0; i < 16; i++) T_accum[i] = (i % 5 == 0) ? 1.0f : 0.0f; // 简化：对角为1
+
+    // 逐次右乘
+    for (int i = 0; i < 6; i++) {
+        float tmp[16];
+        // 4x4矩阵乘法：T_accum = T_accum * T[i]
+        for (int row = 0; row < 4; row++) {
+            for (int col = 0; col < 4; col++) {
+                float sum = 0.0f;
+                for (int k = 0; k < 4; k++) {
+                    sum += T_accum[row*4 + k] * T_t[i][k*4 + col];
+                }
+                tmp[row*4 + col] = sum;
+            }
+        }
+        memcpy(T_accum, tmp, sizeof(tmp));
     }
-    
-    /* 从旋转矩阵提取欧拉角 */
-    RotMatToEulerAngle(R06, &(P06[3]));
-    
-    /* 输出结果（位置单位：米 -> 毫米，角度：弧度 -> 度） */
-    _outputPose6D->X = P06[0] * 1000.0f;  /* 米转毫米 */
+
+    // 4. 提取位置和旋转矩阵
+    // 位置：T_accum[3], T_accum[7], T_accum[11] （单位：米）
+    P06[0] = T_accum[3];
+    P06[1] = T_accum[7];
+    P06[2] = T_accum[11];
+
+    // 旋转矩阵：T_accum[0..2], T_accum[4..6], T_accum[8..10]
+    R06[0] = T_accum[0]; R06[1] = T_accum[1]; R06[2] = T_accum[2];
+    R06[3] = T_accum[4]; R06[4] = T_accum[5]; R06[5] = T_accum[6];
+    R06[6] = T_accum[8]; R06[7] = T_accum[9]; R06[8] = T_accum[10];
+
+    // 5. 转换为输出格式
+    _outputPose6D->X = P06[0] * 1000.0f;   // 米 -> 毫米
     _outputPose6D->Y = P06[1] * 1000.0f;
     _outputPose6D->Z = P06[2] * 1000.0f;
-    _outputPose6D->A = P06[3] * RAD_TO_DEG;
-    _outputPose6D->B = P06[4] * RAD_TO_DEG;
-    _outputPose6D->C = P06[5] * RAD_TO_DEG;
+    // 从旋转矩阵提取欧拉角（XYZ顺序）
+    RotMatToEulerAngle(R06, &(_outputPose6D->A)); // 注意：该函数输出顺序为 [Z,Y,X]
+    _outputPose6D->A *= 180.0f / (float)M_PI;     // 弧度转度
+    _outputPose6D->B *= 180.0f / (float)M_PI;
+    _outputPose6D->C *= 180.0f / (float)M_PI;
     memcpy(_outputPose6D->R, R06, 9 * sizeof(float));
     _outputPose6D->hasR = true;
-    
+
     return true;
 }
 
@@ -532,21 +533,21 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
     float R36[9];       /* 从关节3到末端的旋转矩阵 */
     float l_sw_2, l_sw; /* 关节1到腕部距离的平方和实际距离 */
     float atan_a, acos_a, acos_e; /* 用于求解关节2,3的中间角度 */
-    
+
     int ind_arm, ind_elbow, ind_wrist; /* 循环索引：臂型、肘型、腕型 */
     int i; /* 通用循环索引 */
-    
+
     /* 延迟计算中间变量（避免重复计算） */
     if (kinematic->l_ew == 0.0f) {
         kinematic->l_ew = sqrtf(kinematic->l_ew_2);
         kinematic->atan_e = atanf(kinematic->armConfig.D_ELBOW / kinematic->armConfig.L_FOREARM);
     }
-    
+
     /* 位置单位转换：毫米 -> 米 */
     P06[0] = _inputPose6D->X / 1000.0f;
     P06[1] = _inputPose6D->Y / 1000.0f;
     P06[2] = _inputPose6D->Z / 1000.0f;
-    
+
     /* 获取末端旋转矩阵（如果未提供则从欧拉角计算） */
     if (!_inputPose6D->hasR) {
         P06[3] = _inputPose6D->A / RAD_TO_DEG;
@@ -556,29 +557,29 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
     } else {
         memcpy(R06, _inputPose6D->R, 9 * sizeof(float));
     }
-    
+
     /* 初始化关节角度候选解（从上一周期角度开始） */
     for (i = 0; i < 2; i++) {
-        qs[i] = _lastJoint6D->a[0] / RAD_TO_DEG;
-        qa[i][0] = _lastJoint6D->a[1] / RAD_TO_DEG;
-        qa[i][1] = _lastJoint6D->a[2] / RAD_TO_DEG;
-        qw[i][0] = _lastJoint6D->a[3] / RAD_TO_DEG;
-        qw[i][1] = _lastJoint6D->a[4] / RAD_TO_DEG;
-        qw[i][2] = _lastJoint6D->a[5] / RAD_TO_DEG;
+        qs[i] = _lastJoint6D->a[0];
+        qa[i][0] = _lastJoint6D->a[1] ;
+        qa[i][1] = _lastJoint6D->a[2] ;
+        qw[i][0] = _lastJoint6D->a[3] ;
+        qw[i][1] = _lastJoint6D->a[4] ;
+        qw[i][2] = _lastJoint6D->a[5] ;
     }
-    
+
     /* 计算腕部点位置（从末端减去腕部连杆） */
     MatMultiply(R06, kinematic->L6_wrist, L0_wt, 3, 3, 1);
     for (i = 0; i < 3; i++) {
         P0_w[i] = P06[i] - L0_wt[i];
     }
-    
+
     /* ========== 求解关节1 ========== */
     /* 检查是否在奇异位置（腕部点在Z轴上） */
     if (sqrtf(P0_w[0] * P0_w[0] + P0_w[1] * P0_w[1]) <= 0.000001f) {
         /* 奇异位置：关节1任意，使用上一周期的值 */
-        qs[0] = _lastJoint6D->a[0] / RAD_TO_DEG;
-        qs[1] = _lastJoint6D->a[0] / RAD_TO_DEG;
+        qs[0] = _lastJoint6D->a[0] ;
+        qs[1] = _lastJoint6D->a[0] ;
         for (i = 0; i < 4; i++) {
             _outputSolves->solFlag[0 + i][0] = -1;  /* 奇异标志 */
             _outputSolves->solFlag[4 + i][0] = -1;
@@ -592,13 +593,13 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
             _outputSolves->solFlag[4 + i][0] = 1;
         }
     }
-    
+
     /* ========== 求解关节2和关节3 ========== */
     for (ind_arm = 0; ind_arm < 2; ind_arm++) {
         /* 计算关节1旋转矩阵（基座到关节1） */
         cosqs = cosf(qs[ind_arm] + kinematic->DH_matrix[0][0]);
         sinqs = sinf(qs[ind_arm] + kinematic->DH_matrix[0][0]);
-        
+
         /* 关节1坐标系相对于基座坐标系的旋转矩阵（实际上是逆变换） */
         R10[0] = cosqs;
         R10[1] = sinqs;
@@ -609,24 +610,24 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
         R10[6] = -sinqs;
         R10[7] = cosqs;
         R10[8] = 0.0f;
-        
+
         /* 将腕部点转换到关节1坐标系 */
         MatMultiply(R10, P0_w, P1_w, 3, 3, 1);
         for (i = 0; i < 3; i++) {
             L1_sw[i] = P1_w[i] - kinematic->L1_base[i];
         }
-        
+
         /* 计算关节1到腕部的距离 */
         l_sw_2 = L1_sw[0] * L1_sw[0] + L1_sw[1] * L1_sw[1];
         l_sw = sqrtf(l_sw_2);
-        
+
         /* 情况1：完全伸展或收缩（大臂+前臂长度等于距离） */
         if (fabsf(kinematic->l_se + kinematic->l_ew - l_sw) <= 0.000001f) {
             qa[0][0] = atan2f(L1_sw[1], L1_sw[0]);
             qa[1][0] = qa[0][0];
             qa[0][1] = 0.0f;
             qa[1][1] = 0.0f;
-            
+
             /* 检查可达性 */
             if (l_sw > kinematic->l_se + kinematic->l_ew) {
                 for (i = 0; i < 2; i++) {
@@ -644,7 +645,7 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
         else if (fabsf(l_sw - fabsf(kinematic->l_se - kinematic->l_ew)) <= 0.000001f) {
             qa[0][0] = atan2f(L1_sw[1], L1_sw[0]);
             qa[1][0] = qa[0][0];
-            
+
             /* 根据臂型确定关节3角度 */
             if (ind_arm == 0) {
                 qa[0][1] = (float)M_PI;
@@ -653,7 +654,7 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
                 qa[0][1] = -(float)M_PI;
                 qa[1][1] = (float)M_PI;
             }
-            
+
             /* 检查可达性 */
             if (l_sw < fabsf(kinematic->l_se - kinematic->l_ew)) {
                 for (i = 0; i < 2; i++) {
@@ -675,31 +676,31 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
                      (kinematic->l_se * l_sw);
             acos_a = fmaxf(-1.0f, fminf(1.0f, acos_a));  /* 限制范围防止数值误差 */
             acos_a = acosf(acos_a);
-            
+
             acos_e = 0.5f * (kinematic->l_se_2 + kinematic->l_ew_2 - l_sw_2) /
                      (kinematic->l_se * kinematic->l_ew);
             acos_e = fmaxf(-1.0f, fminf(1.0f, acos_e));  /* 限制范围防止数值误差 */
             acos_e = acosf(acos_e);
-            
+
             /* 根据臂型（左手/右手）计算两组解 */
             if (ind_arm == 0) {  /* 左手型 */
                 qa[0][0] = atan_a - acos_a + (float)M_PI_2;
-                qa[0][1] = acos_e - kinematic->atan_e + (float)M_PI;
+                qa[0][1] = kinematic->atan_e - acos_e + (float)M_PI;
                 qa[1][0] = atan_a + acos_a + (float)M_PI_2;
-                qa[1][1] = -acos_e + kinematic->atan_e - (float)M_PI;
+                qa[1][1] = acos_e + kinematic->atan_e - (float)M_PI;
             } else {  /* 右手型 */
                 qa[0][0] = atan_a + acos_a + (float)M_PI_2;
-                qa[0][1] = -acos_e + kinematic->atan_e - (float)M_PI;
+                qa[0][1] = acos_e + kinematic->atan_e - (float)M_PI;
                 qa[1][0] = atan_a - acos_a + (float)M_PI_2;
-                qa[1][1] = acos_e - kinematic->atan_e + (float)M_PI;
+                qa[1][1] = kinematic->atan_e - acos_e + (float)M_PI;
             }
-            
+
             for (i = 0; i < 2; i++) {
                 _outputSolves->solFlag[4 * ind_arm + 0 + i][1] = 1;
                 _outputSolves->solFlag[4 * ind_arm + 2 + i][1] = 1;
             }
         }
-        
+
         /* ========== 求解关节4,5,6 ========== */
         for (ind_elbow = 0; ind_elbow < 2; ind_elbow++) {
             /* 计算关节2和3的变换矩阵 */
@@ -707,7 +708,7 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
             sinqa[0] = sinf(qa[ind_elbow][0] + kinematic->DH_matrix[1][0]);
             cosqa[1] = cosf(qa[ind_elbow][1] + kinematic->DH_matrix[2][0]);
             sinqa[1] = sinf(qa[ind_elbow][1] + kinematic->DH_matrix[2][0]);
-            
+
             /* 从关节1到关节3的旋转矩阵 */
             R31[0] = cosqa[0] * cosqa[1] - sinqa[0] * sinqa[1];
             R31[1] = cosqa[0] * sinqa[1] + sinqa[0] * cosqa[1];
@@ -718,12 +719,12 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
             R31[6] = cosqa[0] * sinqa[1] + sinqa[0] * cosqa[1];
             R31[7] = -cosqa[0] * cosqa[1] + sinqa[0] * sinqa[1];
             R31[8] = 0.0f;
-            
+
             /* 计算从基座到关节3的旋转矩阵 */
             MatMultiply(R31, R10, R30, 3, 3, 3);
             /* 计算从关节3到末端的旋转矩阵 */
             MatMultiply(R30, R06, R36, 3, 3, 3);
-            
+
             /* 求解关节5（根据旋转矩阵的特定元素） */
             if (R36[8] >= 1.0f - 0.000001f) {  /* 关节5接近0° */
                 cosqw = 1.0f;
@@ -748,7 +749,7 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
                     qw[1][1] = acosf(cosqw);
                 }
             }
-            
+
             /* 求解关节4和关节6（检查奇异位置） */
             if (fabsf(fabsf(cosqw) - 1.0f) <= 0.000001f) {
                 /* 奇异位置：关节5为0或180度，关节4和6耦合 */
@@ -793,20 +794,20 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
                 _outputSolves->solFlag[4 * ind_arm + 2 * ind_elbow + 0][2] = 1;  /* 有效 */
                 _outputSolves->solFlag[4 * ind_arm + 2 * ind_elbow + 1][2] = 1;
             }
-            
+
             /* ========== 存储结果 ========== */
             for (ind_wrist = 0; ind_wrist < 2; ind_wrist++) {
                 int sol_index = 4 * ind_arm + 2 * ind_elbow + ind_wrist;
-                
+
                 /* 关节1：角度标准化并转换为度 */
                 _outputSolves->config[sol_index].a[0] = NormalizeAngle(qs[ind_arm]) * RAD_TO_DEG;
-                
+
                 /* 关节2和3：角度标准化并转换为度 */
                 for (i = 0; i < 2; i++) {
                     _outputSolves->config[sol_index].a[1 + i] =
                         NormalizeAngle(qa[ind_elbow][i]) * RAD_TO_DEG;
                 }
-                
+
                 /* 关节4,5,6：角度标准化并转换为度 */
                 for (i = 0; i < 3; i++) {
                     _outputSolves->config[sol_index].a[3 + i] =
@@ -815,7 +816,7 @@ bool DOF6_SolveIK(DOF6Kinematic* kinematic, const Pose6D_t* _inputPose6D,
             }
         }
     }
-    
+
     return true;
 }
 
@@ -836,7 +837,9 @@ Joint6D_t Joint6D_Subtract(const Joint6D_t* joints1, const Joint6D_t* joints2)
     
     return result;
 }
-#define DEBUG_JOINTS 1
+uint8_t Flag_Solve_FK=0; //正解计算标准
+uint8_t Flag_Solve_IK=0; //逆解计算标准
+#define DEBUG_JOINTS 0
 void Joints_FK(float angle1,float angle2,float angle3,float angle4,float angle5,float angle6) {
     DOF6Kinematic robot;
     Joint6D_t joints;
@@ -855,16 +858,21 @@ void Joints_FK(float angle1,float angle2,float angle3,float angle4,float angle5,
     else {OTTO_uart(&huart_debug,"关节角5超限");}
     if (angle6>=MOTOR6_MIN_LIMIT&&angle6<=MOTOR6_MAX_LIMIT) joints.a[5] = angle6;
     else {OTTO_uart(&huart_debug,"关节角6超限");}
+#else
+    joints.a[0] = angle1;
+    joints.a[1] = angle2;
+    joints.a[2] = angle3;
+    joints.a[3] = angle4;
+    joints.a[4] = angle5;
+    joints.a[5] = angle6;
 #endif
-    float joint[6]      = {angle1,angle2,angle3,angle4,angle5,angle6};
     float joint_min[6]  = {MOTOR1_MIN_LIMIT, MOTOR2_MIN_LIMIT, MOTOR3_MIN_LIMIT, MOTOR4_MIN_LIMIT, MOTOR5_MIN_LIMIT, MOTOR6_MIN_LIMIT}; // 最小限位
     float joint_max[6]  = {MOTOR1_MAX_LIMIT, MOTOR2_MAX_LIMIT, MOTOR3_MAX_LIMIT, MOTOR4_MAX_LIMIT, MOTOR5_MAX_LIMIT, MOTOR6_MAX_LIMIT};       // 最大限位
     float max_vel[6]    = {MOTOR1_MAX_VEL, MOTOR2_MAX_VEL, MOTOR3_MAX_VEL, MOTOR4_MAX_VEL, MOTOR5_MAX_VEL, MOTOR6_MAX_VEL};          // 最大速度（°/s）
-
-
-    if (Joint6D_CheckLimit(joint,joint_min,joint_max)) {
+    if (Joint6D_CheckLimit(&joints,joint_min,joint_max)) {
         DOF6_SolveFK(&robot, &joints, &fk_pose);
         if (fk_pose.hasR) {
+            Flag_Solve_FK = 1;  //正解计算完成
             OTTO_uart(&huart_debug, "=========================");
             OTTO_uart(&huart_debug,"正解计算完成，末端姿态为：");
             OTTO_uart(&huart_debug, "位置：X=%.2f mm | Y=%.2f mm | Z=%.2f mm", fk_pose.X, fk_pose.Y, fk_pose.Z);
@@ -877,9 +885,11 @@ void Joints_FK(float angle1,float angle2,float angle3,float angle4,float angle5,
             }
         }
     }else {
+        Flag_Solve_FK = -1; //超限位导致正解错误
         OTTO_uart(&huart_debug,"关节角超限");
     }
 }
+float target_x=0, target_y=0, target_z=0;
 void Joints_IK(float x,float y,float z) {
     DOF6Kinematic robot;
     Joint6D_t current_joints,best_ik_joints;
@@ -887,18 +897,20 @@ void Joints_IK(float x,float y,float z) {
     fk_pose.X = x;
     fk_pose.Y = y;
     fk_pose.Z = z;
-    fk_pose.A = -10.15;
-    fk_pose.B = 48.43;
-    fk_pose.C = -16.52;
+    target_x=x;
+    target_y=y;
+    target_z=z;
     fk_pose.hasR = false;
     IKSolves_t ik_solves;
     DOF6Kinematic_Init(&robot, L_BASE_M, D_BASE_M, L_ARM_M, L_FOREARM_M, D_ELBOW_M, L_WRIST_M);
     Joint6D_ReadFromMotor(&current_joints);
     DOF6_SolveIK(&robot, &fk_pose, &current_joints, &ik_solves);
+
     float joint_min[6]  = {MOTOR1_MIN_LIMIT, MOTOR2_MIN_LIMIT, MOTOR3_MIN_LIMIT, MOTOR4_MIN_LIMIT, MOTOR5_MIN_LIMIT, MOTOR6_MIN_LIMIT}; // 最小限位
     float joint_max[6]  = {MOTOR1_MAX_LIMIT, MOTOR2_MAX_LIMIT, MOTOR3_MAX_LIMIT, MOTOR4_MAX_LIMIT, MOTOR5_MAX_LIMIT, MOTOR6_MAX_LIMIT};       // 最大限位
     float max_vel[6]    = {MOTOR1_MAX_VEL, MOTOR2_MAX_VEL, MOTOR3_MAX_VEL, MOTOR4_MAX_VEL, MOTOR5_MAX_VEL, MOTOR6_MAX_VEL};          // 最大速度（°/s）
     if (IKSolves_SelectBest(&ik_solves, &current_joints, joint_min, joint_max, &best_ik_joints)) {
+        Flag_Solve_IK = 1;  //逆解成功
         OTTO_uart(&huart_debug, "=========================");
         OTTO_uart(&huart_debug,"逆解计算完成，最佳关节角：");
         OTTO_uart(&huart_debug, "J1: %.2f ° | J2: %.2f ° | J3: %.2f °", best_ik_joints.a[0], best_ik_joints.a[1], best_ik_joints.a[2]);
@@ -908,7 +920,104 @@ void Joints_IK(float x,float y,float z) {
             OTTO_uart(&huart_debug, "开启电机运动到指定位置");
         }
     }else {
+        Flag_Solve_IK = -1;  //无有效最优解
         OTTO_uart(&huart_debug, "❌ IK无有效最优解！");
     }
 
+}
+/**
+ * @brief 批量逆解-正解验证测试函数
+ * @param x_start X轴起始值（毫米）
+ * @param x_end X轴终止值（毫米）
+ * @param x_step X轴步长（毫米）
+ * @param y_start Y轴起始值（毫米）
+ * @param y_end Y轴终止值（毫米）
+ * @param y_step Y轴步长（毫米）
+ * @param z_start Z轴起始值（毫米）
+ * @param z_end Z轴终止值（毫米）
+ * @param z_step Z轴步长（毫米）
+ * @param target_a 目标姿态A角（度）
+ * @param target_b 目标姿态B角（度）
+ * @param target_c 目标姿态C角（度）
+ * @note 遍历指定空间点，对每个点计算逆解并选取最优解，然后进行正解验证，输出关节角和位置误差。
+ */
+void Joints_IK_BatchTest(float x_start, float x_end, float x_step,
+                         float y_start, float y_end, float y_step,
+                         float z_start, float z_end, float z_step,
+                         float target_a, float target_b, float target_c)
+{
+    DOF6Kinematic robot;
+    Joint6D_t current_joints, best_joints;
+    Pose6D_t target_pose, fk_pose;
+    IKSolves_t ik_solves;
+
+    // 初始化机械臂参数
+    DOF6Kinematic_Init(&robot, L_BASE_M, D_BASE_M, L_ARM_M, L_FOREARM_M, D_ELBOW_M, L_WRIST_M);
+
+    // 读取当前关节角（作为选择最优解时的参考，保持不变）
+    Joint6D_ReadFromMotor(&current_joints);
+
+    // 关节限位数组
+    float joint_min[6] = {MOTOR1_MIN_LIMIT, MOTOR2_MIN_LIMIT, MOTOR3_MIN_LIMIT,
+                           MOTOR4_MIN_LIMIT, MOTOR5_MIN_LIMIT, MOTOR6_MIN_LIMIT};
+    float joint_max[6] = {MOTOR1_MAX_LIMIT, MOTOR2_MAX_LIMIT, MOTOR3_MAX_LIMIT,
+                           MOTOR4_MAX_LIMIT, MOTOR5_MAX_LIMIT, MOTOR6_MAX_LIMIT};
+
+    OTTO_uart(&huart_debug, "==================== IK批处理测试开始 ====================");
+    OTTO_uart(&huart_debug, "遍历范围：X[%.1f,%.1f]步长%.1f | Y[%.1f,%.1f]步长%.1f | Z[%.1f,%.1f]步长%.1f",
+              x_start, x_end, x_step, y_start, y_end, y_step, z_start, z_end, z_step);
+    OTTO_uart(&huart_debug, "目标姿态：A=%.2f° B=%.2f° C=%.2f°", target_a, target_b, target_c);
+    OTTO_uart(&huart_debug, "---------------------------------------------------------");
+
+    int total_points = 0;
+    int valid_points = 0;
+
+    for (float x = x_start; x <= x_end + 1e-6f; x += x_step) {
+        for (float y = y_start; y <= y_end + 1e-6f; y += y_step) {
+            for (float z = z_start; z <= z_end + 1e-6f; z += z_step) {
+                total_points++;
+
+                // 设置目标位姿
+                target_pose.X = x;
+                target_pose.Y = y;
+                target_pose.Z = z;
+                target_pose.A = target_a;
+                target_pose.B = target_b;
+                target_pose.C = target_c;
+                target_pose.hasR = false;  // 由欧拉角生成旋转矩阵
+
+                // 计算逆解
+                DOF6_SolveIK(&robot, &target_pose, &current_joints, &ik_solves);
+
+                // 选择最优解（限位内且与当前关节角差值最小）
+                if (!IKSolves_SelectBest(&ik_solves, &current_joints, joint_min, joint_max, &best_joints)) {
+                    continue; // 无有效解，跳过该点
+                }
+
+
+                // 对最优解进行正解验证
+                DOF6_SolveFK(&robot, &best_joints, &fk_pose);
+
+                // 计算位置误差
+                float dx = fk_pose.X - x;
+                float dy = fk_pose.Y - y;
+                float dz = fk_pose.Z - z;
+                float total_err = sqrtf(dx*dx + dy*dy + dz*dz);
+                if (total_err<=10) {
+                    valid_points++;
+                }
+                // 输出结果
+                OTTO_uart(&huart_debug, "点位: X=%.1f Y=%.1f Z=%.1f", x, y, z);
+                OTTO_uart(&huart_debug, "  逆解关节角: J1=%.2f J2=%.2f J3=%.2f J4=%.2f J5=%.2f J6=%.2f",
+                          best_joints.a[0], best_joints.a[1], best_joints.a[2],
+                          best_joints.a[3], best_joints.a[4], best_joints.a[5]);
+                OTTO_uart(&huart_debug, "  正解验证: X=%.2f Y=%.2f Z=%.2f | 误差: ΔX=%.2f ΔY=%.2f ΔZ=%.2f 总误差=%.2f mm",
+                          fk_pose.X, fk_pose.Y, fk_pose.Z, dx, dy, dz, total_err);
+                OTTO_uart(&huart_debug, "---------------------------------------------------------");
+            }
+        }
+    }
+
+    OTTO_uart(&huart_debug, "==================== 批处理测试结束 ====================");
+    OTTO_uart(&huart_debug, "总测试点: %d, 小于10mm的有效解: %d", total_points, valid_points);
 }

@@ -70,6 +70,10 @@ ZDT_FBpara_t* get_motor3();
 motor_t* DAM_get_motor1();
 motor_t* DAM_get_motor2();
 motor_t* DAM_get_motor3();
+
+  extern int Get_Key_Next;
+  extern int8_t Get_Key_Enter;
+  extern int8_t Get_Key_Enter_Num;
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

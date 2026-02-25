@@ -48,6 +48,12 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/DAM_Motor/DM_Motor_LOG.h
         Core/6DOF_Algorithm/6DOF_Control.c
         Core/6DOF_Algorithm/6DOF_Control.h
+        Core/Menu/OLED_Menu.c
+        Core/Menu/OLED_Menu.h
+        Core/Menu/ottohesl_OLED.c
+        Core/Menu/ottohesl_OLED.h
+        Core/Menu/oledfont.c
+        Core/Menu/oledfont.h
 )
 
 # Add STM32CubeMX generated sources
@@ -71,7 +77,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         Core/Task/
         Core/DAM_Motor/
         Core/ottohesl/
-        Core/6DOF_Algorithm
+        Core/6DOF_Algorithm/
+        Core/Menu/
 )
 
 # Add project symbols (macros)

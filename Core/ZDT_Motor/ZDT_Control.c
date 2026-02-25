@@ -720,14 +720,62 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
  * @note   自动转换速度单位（转/秒→转/分钟）和角度→脉冲数，简化调用
  */
 void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, float vel_RPS, float angle) {
-    uint16_t pos=P(angle);          // 角度转脉冲数
+    uint16_t pos=(uint16_t)(P(fabs(angle)));          // 角度转脉冲数
     uint16_t vel=vel_RPS*60.0f;     // 转/秒 → 转/分钟
 
     // 发送梯形位置模式指令
     ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,ABSOLUTE_POS,SIN);
     osDelay(20); // 延时确保指令发送完成
 }
+// 优化版：内部记录上一次角度，自动对比计算
+void ZDT_MOTOR_ABS_POS(uint8_t addr, float acc, float vel_RPS, float target_angle)
+{
+    // 静态数组：存储每个电机的「上一次目标角度」，函数调用间保持值（首次调用默认0°，对应电机回零位）
+    // 索引0:MOTOR1, 1:MOTOR2, 2:MOTOR3（和地址ZDT_MOTOR1=0x04、0x05、0x06对应）
+    static float last_angle[3] = {0.0f, 0.0f, 0.0f};
+    float angle_diff = 0.0f;  // 当前目标 - 上一次目标，角度差
+    Dir move_dir = CW;        // 自动判断的运动方向
+    float step_angle = 0.0f;  // 需走的步数（角度值，取绝对值）
+    int motor_idx = -1;       // 电机对应的数组索引
 
+    // 1. 映射电机地址到数组索引（ZDT_MOTOR1=0x04→0，ZDT_MOTOR2=0x05→1，ZDT_MOTOR3=0x06→2）
+    switch(addr)
+    {
+        case ZDT_MOTOR1: motor_idx = 0; break;
+        case ZDT_MOTOR2: motor_idx = 1; break;
+        case ZDT_MOTOR3: motor_idx = 2; break;
+        default: return; // 地址错误，直接返回
+    }
+
+    // 2. 计算角度差：当前目标角度 - 上一次目标角度（核心对比逻辑）
+    angle_diff = target_angle - last_angle[motor_idx];
+
+    // 3. 角度差为0，无需运动
+    if(fabs(angle_diff) < 0.0001f) // 浮点精度容错，小于0.01°视为无运动
+    {
+        return;
+    }
+
+    // 4. 自动拆解方向 + 计算步数（兼容负角度）
+    if(angle_diff > 0.0f)
+    {
+        // 目标角度 > 上一次角度 → 沿CW方向走（正方向）
+        move_dir = CW;
+        step_angle = angle_diff; // 步数=角度差（正数）
+    }
+    else
+    {
+        // 目标角度 < 上一次角度 → 沿CCW方向走（反方向）
+        move_dir = CCW;
+        step_angle = -angle_diff; // 步数=角度差的绝对值（转正数传给底层）
+    }
+
+    // 5. 调用底层相对位置函数执行运动（传方向+正步数）
+    ZDT_MOTOR_POSITION(addr, move_dir, acc, vel_RPS, step_angle);
+
+    // 6. 更新「上一次目标角度」为当前目标角度（关键：下次调用时对比）
+    last_angle[motor_idx] = target_angle;
+}
 /**
  * @brief  电机速度模式快捷控制函数
  * @param  addr: 电机地址
