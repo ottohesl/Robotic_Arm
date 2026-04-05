@@ -10,7 +10,7 @@ void Motor_Control(void *argument)
     for(;;)
     {
         // if (i<60) {
-        //     ZDT_MOTOR_POSITION(ZDT_MOTOR2,CW,0.2, 0.1, i);
+
         //     i++;
         // }
         // DAM_MOTOR_POS(MOTOR1 ,-60, 0.1);
@@ -31,23 +31,63 @@ void Motor_Control(void *argument)
 void Solve(void *argument)
 {
       //Joints_FK(63.43, 40.47 ,-70.16   ,0,29.96,-63.66);
-    //  Joints_FK(90.00,17.23,-24.89,0,7.67,0);
+     // Joints_FK(-111.80 ,-45.62,-20.94 ,180.00 ,-66.55 ,-68.20 );
     // Joints_IK_Debug(0.0f, 200, 200.0f, 0.0f, 0.0f, 0.0f);
-    //  //Joints_FK(0, 38.97,0,0,-38.97,0);
-    //Joints_FK(0,60,-90,0,60,0);        //定义初始位置
+    //Joints_IK(0,250,380);
+   // Joints_FK( -90.00, -32.55  ,-40.79  ,0.00 ,73.34 , 90.00 );
+    //ZDT_Control_Origin_Trigger_Return(&hfdcan_zdt,ZDT_MOTOR1,00,SIN);
+   // Joints_FK(0,0,0,0,0,0);
+   Joints_FK(0,60,-90,0,-60,0);        //定义初始位置
+    osDelay(800);
+    Joints_FK(0,60,-90,0,-60,0);
+   // Joints_FK(10,40,-80,20,-20,20);
    // osDelay(3000);
     //Joints_IK_Scan();
-    int i=0;
+    // Joints_IK_BatchTest(-200.0f, 200.0f, 10.0f,   // X范围：-200~200mm，步长50mm
+    //      250.0f, 250.0f, 10.0f,   // Y范围：-200~200mm，步长50mm
+    //      380.0f,  380.0f, 10.0f,   // Z范围：100~300mm，步长50mm
+    //      0.0f, 0.0f, 0.0f);        // 目标姿态为0°
+    float i=-100;
+    int time=800;
+    //
     for(;;)
     {
-        // Joints_IK_BatchTest(-200.0f, 200.0f, 50.0f,   // X范围：-200~200mm，步长50mm
-        //          -200.0f, 200.0f, 50.0f,   // Y范围：-200~200mm，步长50mm
-        //          100.0f,  280.0f, 50.0f,   // Z范围：100~300mm，步长50mm
-        //          0.0f, 0.0f, 0.0f);        // 目标姿态为0°
-        Joints_IK(100,200,280);
+       // Joints_FK(0,60,-90,0,-60,0);
+        //Joints_FK(0,30,-60,60,-60,0);
+        //Joints_FK(0,60,-90,0,-60,0);
+        //Joints_FK(0,60,-90,0,-60,0);
+         // Joints_IK(-100,250,380);
+         // osDelay(time);
+         // Joints_IK(-60,250,380);
+         // osDelay(time);
+         // Joints_IK(-30,250,380);
+         // osDelay(time);
+         // Joints_IK(0,250,380);
+         // osDelay(time);
+         // Joints_IK(30,250,380);
+         // osDelay(time);
+         // Joints_IK(60,250,380);
+         // osDelay(time);
+         // Joints_IK(100,250,380);
+         // osDelay(time);
+         // //回
+         // Joints_IK(60,250,380);
+         // osDelay(time);
+         // Joints_IK(30,250,380);
+         // osDelay(time);
+         // Joints_IK(0,250,380);
+         // osDelay(time);
+         // Joints_IK(-30,250,380);
+         // osDelay(time);
+         // Joints_IK(-60,250,380);
+         // osDelay(time);
+         // Joints_IK(100,200,280);
+         // osDelay(200);
+        //Joints_FK(10, 40 ,-70.16   ,0,29.96,-63.66);
         // if (i<=200) {
-        //     Joints_IK(i,200,200);
-        //     i++;
+        //     Joints_IK(i,250,380);
+        //     i=i+10;
+        //     osDelay(100);
         // }
        // Joints_IK(0,200,200);
         //Joints_IK_Continuous_Test(&huart_debug);
@@ -107,7 +147,19 @@ void Log(void *argument)
     /* Infinite loop */
     for(;;)
     {
-
+/**********************************发送关节角度到mqtt*********************************/
+        Joint6D_t *current_joints = pvPortMalloc(sizeof(Joint6D_t));
+        // 必须判断是否分配成功！防止内存不足死机
+        if(current_joints == NULL)
+        {
+            // 分配失败处理
+            osDelay(1);
+            continue;
+        }
+        Joint6D_ReadFromMotor(current_joints);
+        SendCurrentJointsToESP32(current_joints);
+        vPortFree(current_joints);
+        OTTO_uart(&huart_debug, "dam实时位置:%.2f °,%.2f °,%.2f °",current_joints->a[0],current_joints->a[1],current_joints->a[2]);
 /**********************************步进电机状态打印*********************************/
 #if DEBUG_MODE
         // 遍历所有电机，读取参数并打印日志
@@ -141,7 +193,7 @@ void Log(void *argument)
 /********************************达妙电机状态打印*********************************/
         for (uint8_t i = 0; i<DAM_MOTOR_NUM ; i++)
         {
-           // DAM_Motor_PV_State(D[i]);
+           //DAM_Motor_PV_State(D[i]);
         }
         //周期性延迟（固定频率执行）
         osDelay(100);

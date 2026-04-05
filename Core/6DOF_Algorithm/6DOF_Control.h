@@ -14,12 +14,12 @@
 #include "main.h"
 #define RAD_TO_DEG 57.295777754771045f  /**< 弧度转角度：180/π ≈57.2958 */
 #define DEG_TO_RAD 0.0174532925f
-#define L_BASE_M     0.1015f              // 基座高度（米）
-#define D_BASE_M     0.0f                 // 基座偏移（米，实际为0）
-#define L_ARM_M      0.093f               // 大臂长度（米）
-#define L_FOREARM_M  0.174f               // 小臂长度（米）
+#define L_BASE_M     0.1040f              // 基座高度（米）
+#define D_BASE_M     0.025f                 // 基座偏移（米）
+#define L_ARM_M      0.155f               // 大臂长度（米）
+#define L_FOREARM_M  0.200f               // 小臂长度（米）
 #define D_ELBOW_M    0.0f                 // 肘部偏移（米，实际为0）
-#define L_WRIST_M    0.088f               // 腕部长度（米）
+#define L_WRIST_M    0.076f               // 腕部长度（米）
 
 #define MOTOR1_MIN_LIMIT    -180.0f
 #define MOTOR1_MAX_LIMIT     180.0f
@@ -30,7 +30,7 @@
 #define MOTOR2_MAX_VEL       90.0f
 
 #define MOTOR3_MIN_LIMIT    -90.0f
-#define MOTOR3_MAX_LIMIT     90.0f
+#define MOTOR3_MAX_LIMIT     80.0f
 #define MOTOR3_MAX_VEL       90.0f
 
 #define MOTOR4_MIN_LIMIT    -180.0f
@@ -129,6 +129,7 @@ typedef struct {
 extern uint8_t Flag_Solve_FK; //正解计算标准
 extern uint8_t Flag_Solve_IK; //逆解计算标准
 extern float target_x, target_y, target_z;
+void SendCurrentJointsToESP32(const Joint6D_t* current_joints);
 bool Joint6D_CheckLimit(const Joint6D_t* joints, const float* min_angle, const float* max_angle);
 bool IKSolves_SelectBest(const IKSolves_t* solves, const Joint6D_t* current_joints,const float* min_angle, const float* max_angle, Joint6D_t* best_joints);
 float Joint6D_CalcSyncVel(const Joint6D_t* current_joints, const Joint6D_t* target_joints,const float* max_vel, float* target_vel);

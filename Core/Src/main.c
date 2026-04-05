@@ -18,7 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
+#include "FreeRTOS.h"
+#include "cmsis_os2.h"
 #include "dma.h"
 #include "fdcan.h"
 #include "i2c.h"
@@ -208,44 +209,15 @@ void set_origin() {
   //ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR2);
 }
 void ZDT_Motors_Init(void);
-#define FRAM_HEAD 'A'
-#define FRAM_TAIL 'B'
-#define FRAM_DATA  10
-#define KEY_HEAD  'R'
-#define KEY_TAIL  'S'
-#define NEXT_LENGTH 3
-#define ENTER_LENGTH 4
-int8_t Rxdata[FRAM_DATA]__attribute__((section(".ram"))) = {0};
-int Get_Key_Next=0;
-int8_t Get_Key_Enter=0;
-int8_t Get_Key_Enter_Num=0;
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-  if (huart->Instance == USART3) {
-    if (Size==ENTER_LENGTH) {
-      //帧格式为A12B----12表示跳到12行位置
-      if (Rxdata[0]==FRAM_HEAD&&Rxdata[ENTER_LENGTH-1]==FRAM_TAIL) {
-        int data= ((Rxdata[1] - '0') * 10) + (Rxdata[2] - '0');
-        Get_Key_Next=data;
-        OTTO_uart(&huart_debug,"go to:%d",data);
-      }
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+    if (GPIO_Pin==ROBOTIC_ZERO_KEY) {
+      MOTOR_SetPosVal(MOTOR_1, 0,  MOTOR1_MAX_VEL );
+      MOTOR_SetPosVal(MOTOR_2, 60,  MOTOR2_MAX_VEL );
+      MOTOR_SetPosVal(MOTOR_3, -90,  MOTOR3_MAX_VEL );
+      MOTOR_SetPosVal(MOTOR_4, 0,  MOTOR4_MAX_VEL );
+      MOTOR_SetPosVal(MOTOR_5, -60,  MOTOR5_MAX_VEL );
+      MOTOR_SetPosVal(MOTOR_6, 0,  MOTOR6_MAX_VEL );
     }
-    if (Size==NEXT_LENGTH) {
-      //帧格式为A1B-----1表示为确认进入
-      if (Rxdata[0]==FRAM_HEAD&&Rxdata[NEXT_LENGTH-1]==FRAM_TAIL) {
-        Get_Key_Enter= Rxdata[1] - '0';
-        OTTO_uart(&huart_debug,"enter:%d",Get_Key_Enter);
-      }
-    }
-    if (Size==NEXT_LENGTH) {
-      //帧格式为R1S-----1表示为确认下划，模拟为按键按下状态
-      if (Rxdata[0]==KEY_HEAD&&Rxdata[NEXT_LENGTH-1]==KEY_TAIL) {
-        if (Rxdata[1] - '0') Get_Key_Enter_Num=1;
-        else Get_Key_Enter_Num=0;
-        OTTO_uart(&huart_debug,"next:%d", Get_Key_Enter_Num);
-      }
-    }
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart_debug,Rxdata,FRAM_DATA);
-  }
 }
 /* USER CODE END 0 */
 
@@ -287,6 +259,8 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_I2C4_Init();
+  MX_I2C3_Init();
+  MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
   /**************************开启fdcan和fifo中断*********************************/
   HAL_FDCAN_Start(&hfdcan1);
@@ -304,7 +278,11 @@ int main(void)
   //write_pos_mode(MOTOR3);
   //set_origin();
   /*********************************使能达妙电机**********************************/
-  HAL_Delay(1000);
+  HAL_Delay(500);
+  enable_motor(&motor1);
+  enable_motor(&motor2);
+  enable_motor(&motor3);
+  HAL_Delay(500);
   enable_motor(&motor1);
   enable_motor(&motor2);
   enable_motor(&motor3);
@@ -314,16 +292,15 @@ int main(void)
   /*********************************运动学初始化***********************************/
    //ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR1);
   //ZDT_MOTOR_POSITION(ZDT_MOTOR2,CW,0.2, 0.5,62);
+   ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR1);
   //HAL_Delay(1000);
   //ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR2);
-  //set_origin();
   all_motor_init(0);
  // ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR1);
   //ZDT_MOTOR_POSITION(ZDT_MOTOR2,CCW,0.2, 0.5, 0);
   //ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR2);
   //ZDT_Control_Origin_SET(&hfdcan_zdt,ZDT_MOTOR3);
   /*********************************OLED初始化***********************************/
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart_debug,Rxdata,FRAM_DATA);
   OLED_Init();
 
   /* USER CODE END 2 */

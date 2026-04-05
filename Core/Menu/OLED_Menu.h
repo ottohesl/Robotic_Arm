@@ -8,9 +8,9 @@
 #include "6DOF_Control.h"
 // -------------------------- 硬件定义 --------------------------
 #define KEY_EN_GPIO_Port   GPIOA
-#define KEY_EN_Pin         GPIO_PIN_2    // Enter键
-#define KEY_NE_GPIO_Port   GPIOB
-#define KEY_NE_Pin         GPIO_PIN_10   // Next键
+#define KEY_EN_Pin         GPIO_PIN_6    // Enter键
+#define KEY_NE_GPIO_Port   GPIOA
+#define KEY_NE_Pin         GPIO_PIN_5   // Next键
 
 // -------------------------- 枚举定义 --------------------------
 // 菜单层级（简化为固定3级）

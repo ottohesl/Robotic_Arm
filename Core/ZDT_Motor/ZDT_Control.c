@@ -214,7 +214,7 @@ void ZDT_Control_Vel_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir, uint
  * @retval 无
  * @note   指令格式：地址+0xFD(功能码)+方向+最大速度(2字节)+加速度+位置(4字节)+位置类型+同步标志+校验
  */
-void ZDT_Control_Trape_Pos_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir,uint16_t acc_vel, uint16_t max_vel, uint16_t pos, Loca_Manage loca,Sync sync) {
+void ZDT_Control_Trape_Pos_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir,uint16_t acc_vel, uint16_t max_vel, uint32_t pos, Loca_Manage loca,Sync sync) {
     uint8_t cmd[16] = {0};
 
     // 装载梯形位置控制指令
@@ -720,9 +720,15 @@ void ZDT_Control_Analyze_FDBack(ZDT_FBpara_t *motor,const uint8_t *rxdata,const 
  * @note   自动转换速度单位（转/秒→转/分钟）和角度→脉冲数，简化调用
  */
 void ZDT_MOTOR_POSITION(uint8_t addr,Dir dir,uint16_t acc, float vel_RPS, float angle) {
-    uint16_t pos=(uint16_t)(P(fabs(angle)));          // 角度转脉冲数
-    uint16_t vel=vel_RPS*60.0f;     // 转/秒 → 转/分钟
-
+    if (addr==ZDT_MOTOR1) {
+        uint32_t pos = P(fabs(angle*80.0f)); //减速比为80
+        uint32_t vel=vel_RPS*60.0f*80.0f;
+        ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,ABSOLUTE_POS,SIN);
+        osDelay(20);
+        return;
+    }
+    uint32_t pos=(uint16_t)(P(fabs(angle)));          // 角度转脉冲数
+    uint32_t vel=vel_RPS*60.0f;     // 转/秒 → 转/分钟
     // 发送梯形位置模式指令
     ZDT_Control_Trape_Pos_Mode(Motor_hfdcan,addr,dir,acc,vel,pos,ABSOLUTE_POS,SIN);
     osDelay(20); // 延时确保指令发送完成

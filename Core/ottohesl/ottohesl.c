@@ -18,6 +18,7 @@
   *
  */
 #include "ottohesl.h"
+#include "main.h"
 
 /**
  * @defgroup UART_DEBUG_CONFIG 串口调试配置宏
@@ -26,7 +27,7 @@
  */
 #define debug_mode  0       /**< 串口调试模式开关：1=开启（调用uart_debugger），0=关闭 */
 #define LCD         0       /**< LCD调试模式开关：1=开启（显示HAL状态到1.54寸LCD），0=关闭 */
-#define open_freertos  0    /**< FREERTOS：1=开启(互斥锁)，0=关闭 */
+#define open_freertos  1    /**< FREERTOS：1=开启(互斥锁)，0=关闭 */
 /** @} */
 
 /**
@@ -42,7 +43,7 @@
   */
 void OTTO_uart(UART_HandleTypeDef *huart, const char *fmt, ...) {
 #if open_freertos
-    osStatus_t mutex_ret = osMutexAcquire(uartMutexHandle, osWaitForever);
+    osMutexAcquire(OTTO_Uart_MutexHandle, osWaitForever);
 #endif
     /* 静态缓存区：映射到链接脚本定义的.ram段（SRAM2，0x24000000开始），避免H7 DMA地址限制 */
     static char message[OTTOHESL_UART_BUFFER];
@@ -69,7 +70,7 @@ void OTTO_uart(UART_HandleTypeDef *huart, const char *fmt, ...) {
     /* 4. 轮询模式发送格式化数据 */
     HAL_StatusTypeDef uart_tx_status = HAL_UART_Transmit(huart, (uint8_t *) message, len, 100);
 #if open_freertos
-    osMutexRelease(uartMutexHandle);
+    osMutexRelease(OTTO_Uart_MutexHandle);
 #endif
     /* 5. 调试模式：输出发送状态（串口/LCD） */
 #if debug_mode

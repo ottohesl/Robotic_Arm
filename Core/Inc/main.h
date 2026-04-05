@@ -54,10 +54,11 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
-#define huart_debug   huart3
-#define huart_sensor  huart1
+#define huart_debug   huart1
+#define huart_sensor  huart2
 #define hfdcan_zdt    hfdcan2
 #define hfdcan_dam    hfdcan1
+#define ROBOTIC_ZERO_KEY   GPIO_PIN_7
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -85,6 +86,8 @@ motor_t* DAM_get_motor3();
   extern osMessageQueueId_t CAN1RX_DataHandle;
   extern osMessageQueueId_t CAN2RX_DataHandle;
   extern osMutexId_t uart_log_mutexHandle;
+  extern osMutexId_t Read_Motor_MutexHandle;
+  extern osMutexId_t OTTO_Uart_MutexHandle;
   //extern ZDT_FBpara_t z_motor1;
 /* USER CODE END Private defines */
 

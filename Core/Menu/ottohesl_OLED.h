@@ -7,7 +7,7 @@
 #include "i2c.h"
 
 // 硬件配置
-#define OLED_I2C_HANDLE    &hi2c4          // I2C4句柄
+#define OLED_I2C_HANDLE    &hi2c3          // I2C4句柄
 #define OLED_I2C_ADDR      0x78            // OLED I2C地址(0x3C<<1)
 
 // OLED坐标/尺寸

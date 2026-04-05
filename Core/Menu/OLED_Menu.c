@@ -15,28 +15,28 @@ Menu_Handle current_menu={
 // 按键读取函数（保持你的原有逻辑，这里仅补全返回）
 Key_Event get_key() {
     // 你的按键扫描逻辑
-    // if (HAL_GPIO_ReadPin(KEY_EN_GPIO_Port, KEY_EN_Pin) == GPIO_PIN_RESET) {
-    //     HAL_Delay(20); // 消抖
-    //     if (HAL_GPIO_ReadPin(KEY_EN_GPIO_Port, KEY_EN_Pin) == GPIO_PIN_RESET) {
-    //         while(HAL_GPIO_ReadPin(KEY_EN_GPIO_Port, KEY_EN_Pin) == GPIO_PIN_RESET);
-    //         return KEY_EVENT_ENTER;
-    //     }
-    // }
-    // if (HAL_GPIO_ReadPin(KEY_NE_GPIO_Port, KEY_NE_Pin) == GPIO_PIN_RESET) {
-    //     HAL_Delay(20); // 消抖
-    //     if (HAL_GPIO_ReadPin(KEY_NE_GPIO_Port, KEY_NE_Pin) == GPIO_PIN_RESET) {
-    //         while(HAL_GPIO_ReadPin(KEY_NE_GPIO_Port, KEY_NE_Pin) == GPIO_PIN_RESET);
-    //         return KEY_EVENT_NEXT;
-    //     }
-    // }
-    if (Get_Key_Enter) {
-        Get_Key_Enter=0;
-        return KEY_EVENT_ENTER;
+    if (HAL_GPIO_ReadPin(KEY_EN_GPIO_Port, KEY_EN_Pin) == GPIO_PIN_RESET) {
+        HAL_Delay(20); // 消抖
+        if (HAL_GPIO_ReadPin(KEY_EN_GPIO_Port, KEY_EN_Pin) == GPIO_PIN_RESET) {
+            while(HAL_GPIO_ReadPin(KEY_EN_GPIO_Port, KEY_EN_Pin) == GPIO_PIN_RESET);
+            return KEY_EVENT_ENTER;
+        }
     }
-    if (Get_Key_Enter_Num) {
-        Get_Key_Enter_Num=0;
-        return KEY_EVENT_NEXT;
+    if (HAL_GPIO_ReadPin(KEY_NE_GPIO_Port, KEY_NE_Pin) == GPIO_PIN_RESET) {
+        HAL_Delay(20); // 消抖
+        if (HAL_GPIO_ReadPin(KEY_NE_GPIO_Port, KEY_NE_Pin) == GPIO_PIN_RESET) {
+            while(HAL_GPIO_ReadPin(KEY_NE_GPIO_Port, KEY_NE_Pin) == GPIO_PIN_RESET);
+            return KEY_EVENT_NEXT;
+        }
     }
+    // if (Get_Key_Enter) {
+    //     Get_Key_Enter=0;
+    //     return KEY_EVENT_ENTER;
+    // }
+    // if (Get_Key_Enter_Num) {
+    //     Get_Key_Enter_Num=0;
+    //     return KEY_EVENT_NEXT;
+    // }
     return KEY_EVENT_NONE;
 }
 
@@ -49,6 +49,7 @@ void level_1(Menu_Handle* current_menu) {
             OLED_ShowPicture(14,0,100,64,Robotic_picture_Data,OLED_NORMAL);
             OLED_Printf(85,39 , FONT_8, OLED_NORMAL, "ROBOTIC  ARM");
             OLED_ShowFrame();
+            osDelay(20);
         }while (key_event==KEY_EVENT_NONE);
         //检查到任意按键按下后，跳转到第二菜单
         current_menu->current_level = MENU_LEVEL_2;
@@ -109,6 +110,7 @@ void level_2(Menu_Handle* current_menu) {
                 }
                 break;
             }
+            osDelay(20);
         }
     }
 }
@@ -202,6 +204,7 @@ void level_3(Menu_Handle* current_menu) {
                 }
                 break;
             }
+            osDelay(20);
         }
     }
 }
@@ -322,6 +325,7 @@ void level_4(Menu_Handle* current_menu) {
                 }
                 break;
             }
+            osDelay(20);
         }
     }
 }

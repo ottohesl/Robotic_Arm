@@ -257,21 +257,59 @@ float Joint6D_CalcSyncVel(const Joint6D_t* current_joints, const Joint6D_t* targ
     return total_time;
 }
 
-/* ========== 新增：从电机读取当前关节角度 ========== */
+//获取关节电机的位置角度
 bool Joint6D_ReadFromMotor(Joint6D_t* current_joints)
 {
-    // 对接你的电机底层：读取每个电机的当前位置（°）
-    // 示例：需替换为实际的电机位置读取接口
-    current_joints->a[0] = ((float)DAM_get_motor1()->para.pos)* RAD_TO_DEG; // 关节1（达妙1）
-    current_joints->a[1] = ((float)DAM_get_motor2()->para.pos)* RAD_TO_DEG; // 关节2（达妙2）
-    current_joints->a[2] = ((float)DAM_get_motor3()->para.pos)* RAD_TO_DEG; // 关节3（达妙3）
-    current_joints->a[3] = get_motor1()->S_Cpos; // 关节4（张大头1）
-    current_joints->a[4] = get_motor2()->S_Cpos; // 关节5（张大头2）
-    current_joints->a[5] = get_motor3()->S_Cpos; // 关节6（张大头3）
+    // 对接电机底层：读取每个电机的当前位置（°）
+    if (osMutexAcquire(Read_Motor_MutexHandle,osWaitForever)==osOK) {//加锁操作，oled和solve任务都用到了该函数
+        current_joints->a[0] = ((float)DAM_get_motor1()->para.pos)* RAD_TO_DEG; // 关节1（达妙1）
+        current_joints->a[1] = ((float)DAM_get_motor2()->para.pos)* RAD_TO_DEG; // 关节2（达妙2）
+        current_joints->a[2] = ((float)DAM_get_motor3()->para.pos)* RAD_TO_DEG; // 关节3（达妙3）
+        current_joints->a[3] = get_motor1()->S_Cpos; // 关节4（张大头1）
+        current_joints->a[4] = get_motor2()->S_Cpos; // 关节5（张大头2）
+        current_joints->a[5] = get_motor3()->S_Cpos; // 关节6（张大头3）
+        osMutexRelease(Read_Motor_MutexHandle);
+        return true;
+    }
+    return false;
+}
+void UART_SendByte(uint8_t data)
+{
+    // STM32示例：
+     HAL_UART_Transmit(&huart6, &data, 1, 10);
 
-    return true;
+}
+// 浮点数转 32位原始字节（IEEE754，无精度丢失）
+void UART_SendFloat(float f)
+{
+    union {
+        float f_val;
+        uint8_t bytes[4];
+    } conv;
+    conv.f_val = f;
+
+    // 直接发送4字节原始数据
+    UART_SendByte(conv.bytes[0]);
+    UART_SendByte(conv.bytes[1]);
+    UART_SendByte(conv.bytes[2]);
+    UART_SendByte(conv.bytes[3]);
 }
 
+// 发送【仅当前6轴角度】给 ESP32（精简协议）
+void SendCurrentJointsToESP32(const Joint6D_t* current_joints)
+{
+    // 1. 帧头 1字节
+    UART_SendByte(0xFF);
+
+    // 2. 仅发送：6个当前角度 (6×4=24字节)
+    for(int i = 0; i < 6; i++)
+    {
+        UART_SendFloat(current_joints->a[i]);
+    }
+
+    // 3. 帧尾 1字节
+    UART_SendByte(0x6B);
+}
 /**
  * @brief 关节空间运动（MoveJ）：直接控制6轴到目标关节角
  * @param kinematic 运动学结构体
@@ -301,7 +339,8 @@ bool DOF6_MoveJ(DOF6Kinematic* kinematic, const Joint6D_t* current_joints,
     MOTOR_SetPosVal(MOTOR_4, target_joints->a[3], target_vel[3]);
     MOTOR_SetPosVal(MOTOR_5, target_joints->a[4], target_vel[4]);
     MOTOR_SetPosVal(MOTOR_6, target_joints->a[5], target_vel[5]);
-
+    //使用串口6发送到esp32
+    SendCurrentJointsToESP32(current_joints);
     return true;
 }
 
@@ -873,15 +912,15 @@ void Joints_FK(float angle1,float angle2,float angle3,float angle4,float angle5,
         DOF6_SolveFK(&robot, &joints, &fk_pose);
         if (fk_pose.hasR) {
             Flag_Solve_FK = 1;  //正解计算完成
-            OTTO_uart(&huart_debug, "=========================");
-            OTTO_uart(&huart_debug,"正解计算完成，末端姿态为：");
-            OTTO_uart(&huart_debug, "位置：X=%.2f mm | Y=%.2f mm | Z=%.2f mm", fk_pose.X, fk_pose.Y, fk_pose.Z);
-            OTTO_uart(&huart_debug, "姿态：A=%.2f ° | B=%.2f ° | C=%.2f °", fk_pose.A, fk_pose.B, fk_pose.C);
-            OTTO_uart(&huart_debug, "=========================");
+            // OTTO_uart(&huart_debug, "=========================");
+            // OTTO_uart(&huart_debug,"正解计算完成，末端姿态为：");
+            // OTTO_uart(&huart_debug, "位置：X=%.2f mm | Y=%.2f mm | Z=%.2f mm", fk_pose.X, fk_pose.Y, fk_pose.Z);
+            // OTTO_uart(&huart_debug, "姿态：A=%.2f ° | B=%.2f ° | C=%.2f °", fk_pose.A, fk_pose.B, fk_pose.C);
+            // OTTO_uart(&huart_debug, "=========================");
             Joint6D_t current_joints;
             Joint6D_ReadFromMotor(&current_joints);
             if (DOF6_MoveJ(&robot,&current_joints,&joints,&max_vel,&joint_min,&joint_max)) {
-                OTTO_uart(&huart_debug, "开启电机运动到指定位置");
+                //OTTO_uart(&huart_debug, "开启电机运动到指定位置");
             }
         }
     }else {

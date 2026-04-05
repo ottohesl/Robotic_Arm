@@ -21,7 +21,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
+#include "FreeRTOS.h"
+#include "cmsis_os2.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -112,6 +113,16 @@ osMutexId_t uart_log_mutexHandle;
 const osMutexAttr_t uart_log_mutex_attributes = {
   .name = "uart_log_mutex"
 };
+/* Definitions for Read_Motor_Mutex */
+osMutexId_t Read_Motor_MutexHandle;
+const osMutexAttr_t Read_Motor_Mutex_attributes = {
+  .name = "Read_Motor_Mutex"
+};
+/* Definitions for OTTO_Uart_Mutex */
+osMutexId_t OTTO_Uart_MutexHandle;
+const osMutexAttr_t OTTO_Uart_Mutex_attributes = {
+  .name = "OTTO_Uart_Mutex"
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -138,6 +149,12 @@ void MX_FREERTOS_Init(void) {
   /* Create the mutex(es) */
   /* creation of uart_log_mutex */
   uart_log_mutexHandle = osMutexNew(&uart_log_mutex_attributes);
+
+  /* creation of Read_Motor_Mutex */
+  Read_Motor_MutexHandle = osMutexNew(&Read_Motor_Mutex_attributes);
+
+  /* creation of OTTO_Uart_Mutex */
+  OTTO_Uart_MutexHandle = osMutexNew(&OTTO_Uart_Mutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */

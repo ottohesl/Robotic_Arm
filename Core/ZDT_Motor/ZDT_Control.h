@@ -213,7 +213,7 @@ void ZDT_Control_Pos_Clear(FDCAN_HandleTypeDef *hfdcan,uint8_t addr);
 void ZDT_Control_Enable_Motor(FDCAN_HandleTypeDef *hfdcan,uint8_t addr, bool state, Sync sync);
 void ZDT_Control_Tor_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir, uint16_t ele_slope,uint16_t ele, Sync sync);
 void ZDT_Control_Vel_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir, uint16_t vel_slope,uint16_t vel, Sync sync);
-void ZDT_Control_Trape_Pos_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir,uint16_t acc_vel, uint16_t max_vel, uint16_t pos, Loca_Manage loca,Sync sync);
+void ZDT_Control_Trape_Pos_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir,uint16_t acc_vel, uint16_t max_vel, uint32_t pos, Loca_Manage loca,Sync sync);
 void ZDT_Control_Direct_Pos_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Dir dir,uint16_t vel, uint16_t pos, Loca_Manage loca, Sync sync);
 void ZDT_Control_Stop_Motor(FDCAN_HandleTypeDef *hfdcan,uint8_t addr,Sync sync);
 void ZDT_Control_Sync_Mode(FDCAN_HandleTypeDef *hfdcan,uint8_t addr) ;
